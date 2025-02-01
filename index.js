@@ -140,9 +140,22 @@ function transformIntrinsicFunctions(obj) {
   return obj
 }
 
+// Add this new function
+function removeMetadataCondition(template) {
+    if (template.Conditions && template.Conditions.CDKMetadataAvailable) {
+        delete template.Conditions.CDKMetadataAvailable;
+        
+        // Remove the Conditions object if it's empty
+        if (Object.keys(template.Conditions).length === 0) {
+            delete template.Conditions;
+        }
+    }
+}
+
 // Clean the template
 cleanMetadata(template)
 removeCdkMetadata(template)
+removeMetadataCondition(template)
 
 // Transform intrinsic functions
 const transformedTemplate = transformIntrinsicFunctions(template)
@@ -165,6 +178,12 @@ yamlContent = yamlContent.replace(/Ref::/g, '!')
 
 // Remove the colon after intrinsic function names
 yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
+
+// Convert multi-line arrays to inline arrays for specific functions
+yamlContent = yamlContent.replace(
+  /^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm,
+  '$1!$2 [ $3, $4 ]'
+)
 
 // Collapse single-line values to the same line as their key
 yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3')
