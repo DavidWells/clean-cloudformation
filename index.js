@@ -1,6 +1,98 @@
 const fs = require('fs')
 const yaml = require('js-yaml')
 
+function cleanCloudFormation(template) {
+  if (!template) {
+    throw new Error('Template is required')
+  }
+  /*
+
+  console.log('template', template)
+  /** */
+
+
+  // Clean CDK-specific elements
+  removeRootCdkNag(template);
+  removeBootstrapVersionRule(template);
+  removeBootstrapVersionParameter(template);
+
+  // Clean template structure
+  cleanMetadata(template);
+  removeCdkMetadata(template);
+  removeMetadataCondition(template);
+  cleanConditionNames(template);
+  cleanResourceNames(template);
+  removeCdkTags(template);
+  transformParameterArrays(template);
+  sortResourceKeys(template);
+
+  // Transform and sort
+  const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template));
+
+  // Convert to YAML
+  let yamlContent = yaml.dump(transformedTemplate, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    noArrayIndent: true,
+    flowStyle: false,
+    styles: {
+      '!!null': 'empty',
+      '!!str': 'plain',
+    },
+  });
+
+  // Apply YAML formatting
+  yamlContent = yamlContent.replace(/Ref::/g, '!');
+  yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1');
+  yamlContent = yamlContent.replace(
+    /^(\s+)DependsOn:\n(?:(?:\1-\s+.+?\n){1,2})(?!\1-)/gm,
+    (match) => {
+      const values = match
+        .split('\n')
+        .filter(line => line.includes('-'))
+        .map(line => line.substring(line.indexOf('-') + 1).trim())
+        .filter(Boolean);
+
+      if (values.length > 2) {
+        return match;
+      }
+
+      const indent = match.match(/^\s+/)[0];
+      return `${indent}DependsOn: [ ${values.join(', ')} ]\n`;
+    }
+  );
+
+  yamlContent = insertBlankLines(yamlContent);
+  yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n');
+  yamlContent = yamlContent.replace(/(^Resources:\n)\n/, '$1');
+  yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]');
+  yamlContent = yamlContent.replace(
+    /^(\s+)-\s+!Equals\n\1\s+-\s+(.+?)\n\1\s+-\s+(.+?)$/gm,
+    '$1- !Equals [ $2, $3 ]'
+  );
+  yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3');
+  yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!Equals\s+\[.+?\])$/gm, '$1$2: $3');
+  yamlContent = yamlContent.replace(
+    /^(\s+)AllowedValues:\n(?:\1-\s+(.+?)(?:\n|$))+/gm,
+    (match) => {
+      const values = match
+        .split('\n')
+        .filter(line => line.includes('-'))
+        .map(line => {
+          const value = line.substring(line.indexOf('-') + 1).trim();
+          return value.match(/^['"].*['"]$/) ? value : value;
+        })
+        .filter(Boolean);
+
+      const indent = match.match(/^\s+/)[0];
+      return `${indent}AllowedValues: [${values.join(', ')}]\n`;
+    }
+  );
+
+  return yamlContent;
+}
+
 // Add this new function at the start
 function removeRootCdkNag(template) {
   if (template.Metadata && template.Metadata.cdk_nag) {
@@ -76,14 +168,6 @@ function sortTopLevelKeys(template) {
   return sortedTemplate;
 }
 
-// Read and parse the CloudFormation template
-// const template = JSON.parse(fs.readFileSync('./fixtures/dirty-cloudformation.json', 'utf8'))
-const template = JSON.parse(fs.readFileSync('./fixtures/passwordless.json', 'utf8'))
-
-// Add these lines before other cleanup functions
-removeRootCdkNag(template)
-removeBootstrapVersionRule(template)
-removeBootstrapVersionParameter(template)
 
 // Function to recursively remove aws:cdk:path and cfn_nag from Metadata
 function cleanMetadata(obj) {
@@ -469,58 +553,6 @@ function sortResourceKeys(template) {
   }
 }
 
-// Clean the template
-cleanMetadata(template)
-removeCdkMetadata(template)
-removeMetadataCondition(template)
-cleanConditionNames(template)
-cleanResourceNames(template)
-removeCdkTags(template)
-transformParameterArrays(template)
-sortResourceKeys(template)
-
-// Transform intrinsic functions
-const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template))
-
-// Convert to YAML
-let yamlContent = yaml.dump(transformedTemplate, {
-  indent: 2,
-  lineWidth: -1, // Prevent line wrapping
-  noRefs: true, // Handle circular references
-  noArrayIndent: true, // Prevent extra indentation for arrays
-  flowStyle: false,
-  styles: {
-    '!!null': 'empty',
-    '!!str': 'plain',
-  },
-})
-
-// Replace our temporary Ref:: prefix with ! for CloudFormation functions
-yamlContent = yamlContent.replace(/Ref::/g, '!')
-
-// Remove the colon after intrinsic function names
-yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
-
-// Convert short DependsOn arrays to inline syntax (1-2 items only)
-yamlContent = yamlContent.replace(
-  /^(\s+)DependsOn:\n(?:(?:\1-\s+.+?\n){1,2})(?!\1-)/gm,
-  (match) => {
-    const values = match
-      .split('\n')
-      .filter(line => line.includes('-'))
-      .map(line => line.substring(line.indexOf('-') + 1).trim())
-      .filter(Boolean);
-
-    // Only transform if there are 1 or 2 values
-    if (values.length > 2) {
-      return match;
-    }
-
-    const indent = match.match(/^\s+/)[0];
-    return `${indent}DependsOn: [ ${values.join(', ')} ]\n`;
-  }
-);
-
 function insertBlankLines(content) {
   const twoSpaces = '  '
   return content.replace(
@@ -530,63 +562,45 @@ function insertBlankLines(content) {
   )
 }
 
-yamlContent = insertBlankLines(yamlContent)
-
-// Add newlines between resources in the Resources section
-// yamlContent = yamlContent.replace(
-//   /^(Resources:.*?)(?=^  \w+:)/gms,
-//   '$1\n'
-// );
-
-// // Ensure newline before each resource
-// yamlContent = yamlContent.replace(
-//   /^(  \w[^\n]+:)/gm,
-//   '\n$1'
-// );
-
-// Remove any triple newlines that might have been created
-yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n');
-
-// Remove newline at the start of Resources section
-yamlContent = yamlContent.replace(/(^Resources:\n)\n/, '$1');
-
-// Convert multi-line arrays to inline arrays for specific functions
-yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]')
-
-// Convert nested !Equals arrays to inline syntax
-yamlContent = yamlContent.replace(
-  /^(\s+)-\s+!Equals\n\1\s+-\s+(.+?)\n\1\s+-\s+(.+?)$/gm,
-  '$1- !Equals [ $2, $3 ]'
-)
-
-// Collapse single-line values to the same line as their key
-yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3')
-
-// Collapse single-line Equals conditions
-yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!Equals\s+\[.+?\])$/gm, '$1$2: $3')
-
-// Convert AllowedValues arrays to inline syntax
-yamlContent = yamlContent.replace(
-  /^(\s+)AllowedValues:\n(?:\1-\s+(.+?)(?:\n|$))+/gm,
-  (match) => {
-    const values = match
-      .split('\n')
-      .filter(line => line.includes('-'))
-      .map(line => {
-        // Get everything after the dash, trimming whitespace
-        const value = line.substring(line.indexOf('-') + 1).trim();
-        // If it's quoted, keep the quotes, otherwise use as-is
-        return value.match(/^['"].*['"]$/) ? value : value;
-      })
-      .filter(Boolean); // Remove any empty values
-
-    const indent = match.match(/^\s+/)[0];
-    return `${indent}AllowedValues: [${values.join(', ')}]\n`;
+function loadData(fileContents) {
+  // Parse the template - try JSON first, then YAML if that fails
+  let template;
+  try {
+    template = JSON.parse(fileContents);
+  } catch (e) {
+    template = yaml.load(fileContents);
   }
-);
 
-// Write the cleaned YAML to a file
-// fs.writeFileSync('outputs/clean-cloudformation.yaml', yamlContent)
-fs.writeFileSync('outputs/clean-passwordless.yaml', yamlContent)
+  return template
+}
 
-console.log('Transformation complete! Output written to clean-cloudformation.yaml')
+function test() {
+  // Use the function at the bottom of the file
+  const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
+  const template = loadData(fileContents)
+  const cleanedYaml = cleanCloudFormation(template);
+  
+  // Save both the cleaned version and the original as YAML
+  fs.writeFileSync('outputs/clean-passwordless.yaml', cleanedYaml);
+
+  const dirtyYaml = yaml.dump(yaml.load(fileContents), {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    noArrayIndent: true,
+    flowStyle: false,
+  })
+  fs.writeFileSync('outputs/dirty-passwordless.yaml', dirtyYaml);
+
+  // Log the number of lines in the cleaned and dirty files
+  const cleanLines = cleanedYaml.split('\n').length;
+  const dirtyLines = dirtyYaml.split('\n').length;
+  console.log(`Clean lines: ${cleanLines}`);
+  console.log(`Dirty lines: ${dirtyLines}`);
+  // Log savings
+  const savings = ((dirtyLines - cleanLines) / dirtyLines) * 100;
+  console.log(`Savings: ${savings.toFixed(2)}%`);
+  console.log('Transformation complete! Output written to clean-passwordless.yaml');
+}
+
+test()
