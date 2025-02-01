@@ -293,12 +293,43 @@ function cleanResourceNames(template) {
   }
 }
 
+// Add this new function after cleanResourceNames
+function removeCdkTags(template) {
+  if (!template.Resources) return;
+
+  for (const resource of Object.values(template.Resources)) {
+    if (resource.Properties && resource.Properties.Tags) {
+      // Ensure Tags is an array
+      const tags = Array.isArray(resource.Properties.Tags) 
+        ? resource.Properties.Tags 
+        : [resource.Properties.Tags];
+
+      // Filter out aws-cdk: tags and cr-owned tags
+      resource.Properties.Tags = tags.filter(tag => {
+        // Check if tag is a valid object with a Key property
+        return tag && 
+               typeof tag === 'object' && 
+               tag.Key && 
+               typeof tag.Key === 'string' && 
+               !tag.Key.startsWith('aws-cdk:') && 
+               !tag.Key.includes('cr-owned:');
+      });
+
+      // Remove empty Tags array
+      if (resource.Properties.Tags.length === 0) {
+        delete resource.Properties.Tags;
+      }
+    }
+  }
+}
+
 // Clean the template
 cleanMetadata(template)
 removeCdkMetadata(template)
 removeMetadataCondition(template)
 cleanConditionNames(template)
 cleanResourceNames(template)
+removeCdkTags(template)
 
 // Transform intrinsic functions
 const transformedTemplate = transformIntrinsicFunctions(template)
