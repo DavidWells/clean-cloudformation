@@ -2,7 +2,8 @@ const fs = require('fs')
 const yaml = require('js-yaml')
 
 // Read and parse the CloudFormation template
-const template = JSON.parse(fs.readFileSync('./fixtures/dirty-cloudformation.json', 'utf8'))
+// const template = JSON.parse(fs.readFileSync('./fixtures/dirty-cloudformation.json', 'utf8'))
+const template = JSON.parse(fs.readFileSync('./fixtures/passwordless.json', 'utf8'))
 
 // Function to recursively remove aws:cdk:path and cfn_nag from Metadata
 function cleanMetadata(obj) {
@@ -374,6 +375,12 @@ yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|
 // Convert multi-line arrays to inline arrays for specific functions
 yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]')
 
+// Convert nested !Equals arrays to inline syntax
+yamlContent = yamlContent.replace(
+  /^(\s+)-\s+!Equals\n\1\s+-\s+(.+?)\n\1\s+-\s+(.+?)$/gm,
+  '$1- !Equals [ $2, $3 ]'
+)
+
 // Collapse single-line values to the same line as their key
 yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3')
 
@@ -401,6 +408,7 @@ yamlContent = yamlContent.replace(
 );
 
 // Write the cleaned YAML to a file
-fs.writeFileSync('outputs/clean-cloudformation.yaml', yamlContent)
+// fs.writeFileSync('outputs/clean-cloudformation.yaml', yamlContent)
+fs.writeFileSync('outputs/clean-passwordless.yaml', yamlContent)
 
 console.log('Transformation complete! Output written to clean-cloudformation.yaml')
