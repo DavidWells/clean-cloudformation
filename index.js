@@ -1,9 +1,89 @@
 const fs = require('fs')
 const yaml = require('js-yaml')
 
+// Add this new function at the start
+function removeRootCdkNag(template) {
+  if (template.Metadata && template.Metadata.cdk_nag) {
+    delete template.Metadata.cdk_nag;
+    
+    // Remove empty Metadata object
+    if (Object.keys(template.Metadata).length === 0) {
+      delete template.Metadata;
+    }
+  }
+}
+
+// Add this new function after removeRootCdkNag
+function removeBootstrapVersionRule(template) {
+  if (template.Rules && template.Rules.CheckBootstrapVersion) {
+    delete template.Rules.CheckBootstrapVersion;
+    
+    // Remove empty Rules object
+    if (Object.keys(template.Rules).length === 0) {
+      delete template.Rules;
+    }
+  }
+}
+
+// Add this new function after removeBootstrapVersionRule
+function removeBootstrapVersionParameter(template) {
+  if (template.Parameters && 
+      template.Parameters.BootstrapVersion && 
+      template.Parameters.BootstrapVersion.Default && 
+      template.Parameters.BootstrapVersion.Default.startsWith('/cdk-bootstrap/')) {
+    
+    delete template.Parameters.BootstrapVersion;
+    
+    // Remove empty Parameters object
+    if (Object.keys(template.Parameters).length === 0) {
+      delete template.Parameters;
+    }
+  }
+}
+
+// Add this new function after removeBootstrapVersionParameter
+function sortTopLevelKeys(template) {
+  const order = [
+    'AWSTemplateFormatVersion',
+    'Transform',
+    'Description',
+    'Metadata',
+    'Rules',
+    'Mappings',
+    'Parameters',
+    'Conditions',
+    'Resources',
+    'Outputs'
+  ];
+
+  // Create a new object with sorted keys
+  const sortedTemplate = {};
+  
+  // Add keys in specified order if they exist
+  order.forEach(key => {
+    if (template[key] !== undefined) {
+      sortedTemplate[key] = template[key];
+    }
+  });
+
+  // Add any remaining keys that weren't in our order list
+  Object.keys(template).forEach(key => {
+    if (!order.includes(key)) {
+      sortedTemplate[key] = template[key];
+    }
+  });
+
+  return sortedTemplate;
+}
+
 // Read and parse the CloudFormation template
 // const template = JSON.parse(fs.readFileSync('./fixtures/dirty-cloudformation.json', 'utf8'))
 const template = JSON.parse(fs.readFileSync('./fixtures/passwordless.json', 'utf8'))
+
+// Add these lines before other cleanup functions
+removeRootCdkNag(template)
+removeBootstrapVersionRule(template)
+removeBootstrapVersionParameter(template)
 
 // Function to recursively remove aws:cdk:path and cfn_nag from Metadata
 function cleanMetadata(obj) {
@@ -17,6 +97,16 @@ function cleanMetadata(obj) {
       if (obj.Metadata.cfn_nag) {
         delete obj.Metadata.cfn_nag
       }
+      // Remove cdk_nag
+      if (obj.Metadata.cdk_nag) {
+        delete obj.Metadata.cdk_nag
+      }
+      // Remove aws:asset keys
+      Object.keys(obj.Metadata).forEach(key => {
+        if (key.startsWith('aws:asset:')) {
+          delete obj.Metadata[key];
+        }
+      });
       // Remove empty Metadata objects
       if (Object.keys(obj.Metadata).length === 0) {
         delete obj.Metadata
@@ -351,7 +441,7 @@ removeCdkTags(template)
 transformParameterArrays(template)
 
 // Transform intrinsic functions
-const transformedTemplate = transformIntrinsicFunctions(template)
+const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template))
 
 // Convert to YAML
 let yamlContent = yaml.dump(transformedTemplate, {
@@ -371,6 +461,21 @@ yamlContent = yamlContent.replace(/Ref::/g, '!')
 
 // Remove the colon after intrinsic function names
 yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
+
+// Add newlines between resources in the Resources section
+yamlContent = yamlContent.replace(
+  /(Resources:.*?)(?=^  \w+:)/gms,
+  '$1\n'
+);
+
+// Add a second pass to ensure consistent spacing
+yamlContent = yamlContent.replace(
+  /^(  \w[^\n]+:\n(?:(?:    .*\n)*))/gm,
+  '\n$1'
+);
+
+// Remove any triple newlines that might have been created
+yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n');
 
 // Convert multi-line arrays to inline arrays for specific functions
 yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]')
