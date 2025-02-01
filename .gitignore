@@ -10,6 +10,7 @@ public/_data
 public/data
 # remote content
 sources
+outputs
 
 # testing
 /coverage
