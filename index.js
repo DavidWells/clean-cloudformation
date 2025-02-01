@@ -521,20 +521,34 @@ yamlContent = yamlContent.replace(
   }
 );
 
-// Add newlines between resources in the Resources section
-yamlContent = yamlContent.replace(
-  /(Resources:.*?)(?=^  \w+:)/gms,
-  '$1\n'
-);
+function insertBlankLines(content) {
+  const twoSpaces = '  '
+  return content.replace(
+    // /((?<!^\s*$\n)^\s+[A-Za-z0-9_-]+:\s*\n\s+Type:)/gm,
+    /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:)/gm, // two space
+    '\n$1'
+  )
+}
 
-// Add a second pass to ensure consistent spacing
-yamlContent = yamlContent.replace(
-  /^(  \w[^\n]+:\n(?:(?:    .*\n)*))/gm,
-  '\n$1'
-);
+yamlContent = insertBlankLines(yamlContent)
+
+// Add newlines between resources in the Resources section
+// yamlContent = yamlContent.replace(
+//   /^(Resources:.*?)(?=^  \w+:)/gms,
+//   '$1\n'
+// );
+
+// // Ensure newline before each resource
+// yamlContent = yamlContent.replace(
+//   /^(  \w[^\n]+:)/gm,
+//   '\n$1'
+// );
 
 // Remove any triple newlines that might have been created
 yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n');
+
+// Remove newline at the start of Resources section
+yamlContent = yamlContent.replace(/(^Resources:\n)\n/, '$1');
 
 // Convert multi-line arrays to inline arrays for specific functions
 yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]')
