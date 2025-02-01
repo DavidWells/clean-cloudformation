@@ -188,6 +188,9 @@ yamlContent = yamlContent.replace(
 // Collapse single-line values to the same line as their key
 yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3')
 
+// Collapse single-line Equals conditions
+yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!Equals\s+\[.+?\])$/gm, '$1$2: $3')
+
 // Write the cleaned YAML to a file
 fs.writeFileSync('clean-cloudformation.yaml', yamlContent)
 
