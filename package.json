@@ -1,0 +1,9 @@
+{
+  "name": "cloudformation-cleaner",
+  "version": "1.0.0",
+  "description": "Script to clean CloudFormation templates",
+  "main": "index.js",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}
