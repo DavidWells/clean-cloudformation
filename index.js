@@ -431,6 +431,44 @@ function transformParameterArrays(template) {
   }
 }
 
+// Add this new function after transformParameterArrays
+function sortResourceKeys(template) {
+  if (!template.Resources) return;
+
+  const order = [
+    'Type',
+    'Condition',
+    'DependsOn',
+    'DeletionPolicy',
+    'CreationPolicy',
+    'UpdatePolicy',
+    'UpdateReplacePolicy',
+    'Properties',
+    'Metadata'
+  ];
+
+  for (const resourceKey in template.Resources) {
+    const resource = template.Resources[resourceKey];
+    const sortedResource = {};
+    
+    // Add keys in specified order if they exist
+    order.forEach(key => {
+      if (resource[key] !== undefined) {
+        sortedResource[key] = resource[key];
+      }
+    });
+
+    // Add any remaining keys that weren't in our order list
+    Object.keys(resource).forEach(key => {
+      if (!order.includes(key)) {
+        sortedResource[key] = resource[key];
+      }
+    });
+
+    template.Resources[resourceKey] = sortedResource;
+  }
+}
+
 // Clean the template
 cleanMetadata(template)
 removeCdkMetadata(template)
@@ -439,6 +477,7 @@ cleanConditionNames(template)
 cleanResourceNames(template)
 removeCdkTags(template)
 transformParameterArrays(template)
+sortResourceKeys(template)
 
 // Transform intrinsic functions
 const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template))
@@ -461,6 +500,26 @@ yamlContent = yamlContent.replace(/Ref::/g, '!')
 
 // Remove the colon after intrinsic function names
 yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
+
+// Convert short DependsOn arrays to inline syntax (1-2 items only)
+yamlContent = yamlContent.replace(
+  /^(\s+)DependsOn:\n(?:(?:\1-\s+.+?\n){1,2})(?!\1-)/gm,
+  (match) => {
+    const values = match
+      .split('\n')
+      .filter(line => line.includes('-'))
+      .map(line => line.substring(line.indexOf('-') + 1).trim())
+      .filter(Boolean);
+
+    // Only transform if there are 1 or 2 values
+    if (values.length > 2) {
+      return match;
+    }
+
+    const indent = match.match(/^\s+/)[0];
+    return `${indent}DependsOn: [ ${values.join(', ')} ]\n`;
+  }
+);
 
 // Add newlines between resources in the Resources section
 yamlContent = yamlContent.replace(
