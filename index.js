@@ -152,10 +152,71 @@ function removeMetadataCondition(template) {
     }
 }
 
+// Add this new function after removeMetadataCondition
+function cleanConditionNames(template) {
+    // Skip if no conditions
+    if (!template.Conditions) return;
+
+    // Updated pattern to match:
+    // - Any alphanumeric characters followed by
+    // - 8 character hex code at the end
+    const postfixPattern = /^([A-Za-z0-9]+?)([0-9A-F]{8})$/;
+    const conditionRenames = {};
+
+    // First pass: identify conditions that can be renamed
+    for (const conditionName of Object.keys(template.Conditions)) {
+        const match = conditionName.match(postfixPattern);
+        if (match) {
+            const baseName = match[1];
+            // Check if base name already exists
+            const baseNameExists = Object.keys(template.Conditions).some(name => 
+                name !== conditionName && // not the same condition
+                (name === baseName || name.startsWith(baseName + '[')) // exact match or array index
+            );
+            
+            if (!baseNameExists) {
+                conditionRenames[conditionName] = baseName;
+            }
+        }
+    }
+
+    // Helper function to update condition references in an object
+    function updateConditionRefs(obj) {
+        if (!obj || typeof obj !== 'object') return;
+        
+        if (Array.isArray(obj)) {
+            obj.forEach(item => updateConditionRefs(item));
+            return;
+        }
+
+        for (const [key, value] of Object.entries(obj)) {
+            if (key === 'Condition' && typeof value === 'string' && conditionRenames[value]) {
+                obj[key] = conditionRenames[value];
+            } else if (key === 'Fn::If' && Array.isArray(value) && conditionRenames[value[0]]) {
+                value[0] = conditionRenames[value[0]];
+            } else if (typeof value === 'object') {
+                updateConditionRefs(value);
+            }
+        }
+    }
+
+    // Second pass: rename conditions and update references
+    for (const [oldName, newName] of Object.entries(conditionRenames)) {
+        // Rename the condition
+        template.Conditions[newName] = template.Conditions[oldName];
+        delete template.Conditions[oldName];
+    }
+
+    // Update all condition references in the template
+    updateConditionRefs(template.Resources);
+    updateConditionRefs(template.Outputs);
+}
+
 // Clean the template
 cleanMetadata(template)
 removeCdkMetadata(template)
 removeMetadataCondition(template)
+cleanConditionNames(template)
 
 // Transform intrinsic functions
 const transformedTemplate = transformIntrinsicFunctions(template)
