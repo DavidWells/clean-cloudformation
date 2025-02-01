@@ -323,6 +323,23 @@ function removeCdkTags(template) {
   }
 }
 
+// Add this new function after removeCdkTags
+function transformParameterArrays(template) {
+  if (!template.Parameters) return;
+
+  for (const param of Object.values(template.Parameters)) {
+    if (param.AllowedValues && 
+        Array.isArray(param.AllowedValues) && 
+        param.AllowedValues.every(v => typeof v === 'string')) {
+      // Mark this array for compact formatting
+      Object.defineProperty(param.AllowedValues, 'isCompactStringArray', {
+        value: true,
+        enumerable: false
+      });
+    }
+  }
+}
+
 // Clean the template
 cleanMetadata(template)
 removeCdkMetadata(template)
@@ -330,6 +347,7 @@ removeMetadataCondition(template)
 cleanConditionNames(template)
 cleanResourceNames(template)
 removeCdkTags(template)
+transformParameterArrays(template)
 
 // Transform intrinsic functions
 const transformedTemplate = transformIntrinsicFunctions(template)
@@ -361,6 +379,26 @@ yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$
 
 // Collapse single-line Equals conditions
 yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!Equals\s+\[.+?\])$/gm, '$1$2: $3')
+
+// Convert AllowedValues arrays to inline syntax
+yamlContent = yamlContent.replace(
+  /^(\s+)AllowedValues:\n(?:\1-\s+(.+?)(?:\n|$))+/gm,
+  (match) => {
+    const values = match
+      .split('\n')
+      .filter(line => line.includes('-'))
+      .map(line => {
+        // Get everything after the dash, trimming whitespace
+        const value = line.substring(line.indexOf('-') + 1).trim();
+        // If it's quoted, keep the quotes, otherwise use as-is
+        return value.match(/^['"].*['"]$/) ? value : value;
+      })
+      .filter(Boolean); // Remove any empty values
+
+    const indent = match.match(/^\s+/)[0];
+    return `${indent}AllowedValues: [${values.join(', ')}]\n`;
+  }
+);
 
 // Write the cleaned YAML to a file
 fs.writeFileSync('outputs/clean-cloudformation.yaml', yamlContent)
