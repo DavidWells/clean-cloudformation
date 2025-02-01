@@ -39,6 +39,37 @@ function removeCdkMetadata(template) {
   }
 }
 
+// Add this function after the existing functions
+function shouldTransformJoinToSub(joinArgs) {
+  // Only transform if it's a Join with empty string separator
+  if (!Array.isArray(joinArgs) || joinArgs[0] !== '' || !Array.isArray(joinArgs[1])) {
+    return false
+  }
+
+  // Check if any of the elements are Ref or GetAtt
+  return joinArgs[1].some(item => 
+    typeof item === 'object' && 
+    (item['Ref::Ref'] !== undefined || item['Ref::GetAtt'] !== undefined)
+  )
+}
+
+function transformJoinToSub(joinArgs) {
+  const parts = joinArgs[1]
+  let template = ''
+  
+  for (const part of parts) {
+    if (typeof part === 'string') {
+      template += part
+    } else if (part['Ref::Ref']) {
+      template += '${' + part['Ref::Ref'] + '}'
+    } else if (part['Ref::GetAtt']) {
+      template += '${' + part['Ref::GetAtt'] + '}'
+    }
+  }
+  
+  return { 'Ref::Sub': template }
+}
+
 // Function to transform intrinsic functions to shorthand
 function transformIntrinsicFunctions(obj) {
   if (obj && typeof obj === 'object') {
@@ -54,7 +85,12 @@ function transformIntrinsicFunctions(obj) {
       // Transform the known intrinsic functions to shorthand
       switch (key) {
         case 'Fn::Join':
-          transformed['Ref::Join'] = transformIntrinsicFunctions(value)
+          const transformedValue = transformIntrinsicFunctions(value)
+          if (shouldTransformJoinToSub(transformedValue)) {
+            Object.assign(transformed, transformJoinToSub(transformedValue))
+          } else {
+            transformed['Ref::Join'] = transformedValue
+          }
           break
         case 'Fn::Sub':
           transformed['Ref::Sub'] = transformIntrinsicFunctions(value)
@@ -117,6 +153,11 @@ let yamlContent = yaml.dump(transformedTemplate, {
   lineWidth: -1, // Prevent line wrapping
   noRefs: true, // Handle circular references
   noArrayIndent: true, // Prevent extra indentation for arrays
+  flowStyle: false,
+  styles: {
+    '!!null': 'empty',
+    '!!str': 'plain'
+  }
 })
 
 // Replace our temporary Ref:: prefix with ! for CloudFormation functions
@@ -124,6 +165,9 @@ yamlContent = yamlContent.replace(/Ref::/g, '!')
 
 // Remove the colon after intrinsic function names
 yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
+
+// Collapse single-line values to the same line as their key
+yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3')
 
 // Write the cleaned YAML to a file
 fs.writeFileSync('clean-cloudformation.yaml', yamlContent)
