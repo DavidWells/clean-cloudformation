@@ -106,6 +106,17 @@ function cleanCloudFormation(template, options = {}) {
     }
   );
 
+  // Collect names before any transformations
+  const names = collectNames(template);
+
+  // Log collected names at the end
+  if (names.length > 0) {
+    console.log('\nFound the following resource names:');
+    names.forEach(({ path, value }) => {
+      console.log(`${path}: ${value}`);
+    });
+  }
+
   return yamlContent;
 }
 
@@ -740,6 +751,63 @@ function replaceLogicalIds(template, pattern, replacement) {
   if (template.Conditions) {
     updateReferences(template.Conditions);
   }
+}
+
+const ignoreNames = [
+  'AttributeName',
+  'HeaderName'
+]
+
+const ignorePaths = [
+  'AccountRecoverySetting'
+]
+
+// Add this new function to collect names
+function collectNames(template) {
+  const names = new Set();
+  
+  function findNames(obj, path = []) {
+    if (!obj || typeof obj !== 'object') return;
+
+    if (Array.isArray(obj)) {
+      obj.forEach((item, index) => findNames(item, [...path, index]));
+      return;
+    }
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'string' && 
+          (key === 'Name' || 
+           key === 'AliasName' || 
+           key === 'PolicyName' || 
+           key === 'RoleName' ||
+           key === 'BucketName' ||
+           key === 'TableName' ||
+           key === 'FunctionName' ||
+           key.endsWith('Name'))
+        ) {
+        
+        if (ignoreNames.includes(key)) {
+          return;
+        }
+
+        const keyPath = [...path, key].join('.')
+        if (ignorePaths.some(ignorePath => keyPath.includes(ignorePath))) {
+          return;
+        }
+
+        names.add({
+          path: keyPath,
+          value: value
+        });
+      } else if (typeof value === 'object') {
+        findNames(value, [...path, key]);
+      }
+    }
+  }
+
+  findNames(template.Resources, ['Resources']);
+  
+  return Array.from(names).sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function test() {
