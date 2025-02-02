@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "Script to clean CloudFormation templates",
   "main": "index.js",
+  "scripts": {
+    "download-schema": "node scripts/download-cloudformation-schema.js"
+  },
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "adm-zip": "^0.5.10"
   }
 }
