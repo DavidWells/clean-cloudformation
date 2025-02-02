@@ -40,6 +40,7 @@ function updateSchemaContents(content = '', filePath = '') {
   }
 
   const replacements = [
+    /* Fix Types */
     [/"type"\s*:\s*\[\s*"string"\s*,\s*"object"\s*\]/, '"type": "object"'],
     [/"type"\s*:\s*\[\s*"object"\s*,\s*"string"\s*\]/, '"type": "object"'],
     [/"type"\s*:\s*\[\s*"boolean"\s*,\s*"string"\s*\]/, '"type": "boolean"'],
@@ -47,12 +48,21 @@ function updateSchemaContents(content = '', filePath = '') {
     [/"type"\s*:\s*\[\s*"integer"\s*,\s*"string"\s*\]/, '"type": "integer"'],
     [/"type"\s*:\s*\[\s*"number"\s*,\s*"string"\s*\]/, '"type": "number"'],
     [/"type"\s*:\s*\[\s*"boolean"\s*,\s*"null"\s*\]/, '"type": "boolean"'],
-    // Fix regex patterns in schemas
+    /* Fix Regex Patterns */
+    // fix *{1,512}$
     [/\*\{1,512\}\$"/gm,  `{1,512}$"`],
+    // fix {1,512}\Z
     [/\{1,512\}\\\\Z"/gm, `{1,512}$"`],
+    // fix \\Z
     [/\\\\Z"\s*\n/gm, `$"\n`],
+    // fix +{1,255}$
     [/\+\{1,255\}\$"/gm,  `{1,255}$"`],
-    ["\\[a-zA-Z0-9_-:/]+", "\\[[a-zA-Z0-9_\\-:/]+]"]
+    // fix [a-zA-Z0-9_-:/]+
+    ["\\[a-zA-Z0-9_-:/]+", "\\\\[[a-zA-Z0-9_\\\\-:/]+]"],
+    // fix (?s).*
+    [/"\(\?s\)\.\*"/gm, `"[\\\\s\\\\S]*"`],
+    // fix (?s).+
+    [/"\(\?s\)\.\+"/gm, `"[\\\\s\\\\S]+"`],
   ]
   for (const [pattern, replacement] of replacements) {
     const pat = (pattern instanceof RegExp) ? pattern : new RegExp(pattern)
@@ -89,6 +99,7 @@ https.get(SCHEMA_URL, (response) => {
         try {
           let content = fs.readFileSync(filePath, 'utf8');
           content = updateSchemaContents(content, filePath);
+          console.log(content)
           const schema = JSON.parse(content);
           
           if (schema.typeName) {
@@ -106,6 +117,7 @@ https.get(SCHEMA_URL, (response) => {
           }
         } catch (err) {
           console.warn(`Warning: Could not process ${file}: ${err.message}`);
+          throw err
         }
       });
 
