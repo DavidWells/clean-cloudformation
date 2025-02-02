@@ -2,7 +2,7 @@ const fs = require('fs').promises
 const yaml = require('js-yaml')
 const path = require('path')
 const Ajv = require('ajv')
-// const $RefParser = require('@apidevtools/json-schema-ref-parser')
+const { loadSchema, loadAllSchemas, schemaCache } = require('./utils/schemas')
 
 // Create AJV instance with schema loading capability
 const ajv = new Ajv({
@@ -38,52 +38,6 @@ ajv.addKeyword({
   }
 })
 /** */
-
-const schemaCache = new Map()
-
-// Load a single schema by resource type
-async function loadSchema(resourceType) {
-  if (schemaCache.has(resourceType)) {
-    return schemaCache.get(resourceType)
-  }
-
-  try {
-    const schemaPath = path.join(__dirname, 'schemas', `${resourceType}.json`)
-    const content = await fs.readFile(schemaPath, 'utf8')
-    const schema = JSON.parse(content)
-    schemaCache.set(resourceType, schema)
-    return schema
-  } catch (err) {
-    console.warn(`Warning: Could not load schema for ${resourceType}:`, err.message)
-    return null
-  }
-}
-
-// Add after loadSchema function
-async function loadAllSchemas() {
-  try {
-    const schemasDir = path.join(__dirname, 'schemas')
-    const schemaFiles = await fs.readdir(schemasDir)
-    
-    // Load all schemas in parallel
-    await Promise.all(schemaFiles.map(async file => {
-      if (file.endsWith('.json') && file !== '_meta.json') {
-        try {
-          const content = await fs.readFile(path.join(schemasDir, file), 'utf8')
-          const schema = JSON.parse(content)
-          schemaCache.set(schema.typeName, schema)
-        } catch (err) {
-          console.warn(`Warning: Could not load schema file ${file}:`, err.message)
-        }
-      }
-    }))
-
-    return schemaCache
-  } catch (err) {
-    console.error('Error loading schemas:', err.message)
-    throw err
-  }
-}
 
 function hasIntrinsicFunction(value, path = []) {
   if (!value || typeof value !== 'object') return false
