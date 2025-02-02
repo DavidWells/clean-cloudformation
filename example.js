@@ -1,7 +1,7 @@
 const fs = require('fs').promises
 const path = require('path')
 const yaml = require('js-yaml')
-const { cleanCloudFormation, loadData } = require('./index')
+const { cleanCloudFormation } = require('./index')
 
 function outputDirty(fileContents) {
   return yaml.dump(yaml.load(fileContents), {
@@ -16,9 +16,8 @@ function outputDirty(fileContents) {
 async function example(filePath) {
   // Read input file
   let fileContents = await fs.readFile(filePath, 'utf8')
-  const template = await loadData(fileContents)
   
-  const cleanedYaml = await cleanCloudFormation(template, {
+  const cleanedYaml = await cleanCloudFormation(fileContents, {
     asPrompt: true,
     replaceLogicalIds: [
       {

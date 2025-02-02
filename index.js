@@ -230,8 +230,18 @@ async function validateTemplate(template) {
   
   if (!template.Resources) return isValid
 
+  const resources = Object.entries(template.Resources)
+
+  // Validate no resources have the same logical ID
+  const logicalIds = resources.map(([logicalId]) => logicalId)
+  const uniqueLogicalIds = new Set(logicalIds)
+  if (uniqueLogicalIds.size !== logicalIds.length) {
+    console.error('Duplicate logical IDs found in Resources')
+    return false
+  }
+
   // Process all resources in parallel
-  const validations = Object.entries(template.Resources).map(async ([logicalId, resource]) => {
+  const validations = resources.map(async ([logicalId, resource]) => {
     if (!resource.Type) {
       console.error(`Resource ${logicalId} missing Type property`)
       return false
@@ -252,12 +262,29 @@ async function validateTemplate(template) {
   return results.every(result => result)
 }
 
-async function cleanCloudFormation(template, options = {}) {
+async function cleanCloudFormation(input, options = {}) {
+  // Load and parse the template
+  let template
+  if (typeof input === 'string') {
+    // Parse the template - try JSON first, then YAML if that fails
+    try {
+      template = JSON.parse(input)
+    } catch (e) {
+      console.log('error', e)
+      return
+      template = yaml.load(input)
+    }
+  } else {
+    template = input
+  }
+
   if (!template) {
     throw new Error('Template is required')
   }
+
   /*
   console.log('template', template)
+  process.exit(1)
   /** */
 
   // Clean CDK-specific elements
@@ -295,19 +322,27 @@ async function cleanCloudFormation(template, options = {}) {
   }
 
   // Convert to YAML
-  let yamlContent = yaml.dump(transformedTemplate, {
-    indent: 2,
-    lineWidth: -1,
-    noRefs: true,
-    noArrayIndent: false,
-    flowStyle: false,
-    styles: {
-      '!!null': 'empty',
-      '!!str': 'plain'
-    },
-    quotingType: '"',  // Use double quotes instead of single quotes
-    forceQuotes: false // Only quote when necessary
-  })
+  let yamlContent
+  try {
+    yamlContent = yaml.dump(transformedTemplate, {
+      indent: 2,
+      lineWidth: -1,
+      noRefs: true,
+      noArrayIndent: false,
+      flowStyle: false,
+      styles: {
+        '!!null': 'empty',
+        '!!str': 'plain'
+      },
+      quotingType: '"',  // Use double quotes instead of single quotes
+      forceQuotes: false // Only quote when necessary
+    })
+    // console.log('yamlContent', yamlContent)
+    // process.exit(1)
+  } catch(e) {
+    // console.log('error', e)
+    // process.exit(1)
+  }
 
   // Fix array indentation
   yamlContent = yamlContent.replace(/^(\s+)[^-\s].*:\n\1-\s/gm, '$1$&  ')
@@ -1003,17 +1038,6 @@ function insertBlankLines(content) {
   return content
 }
 
-async function loadData(fileContents) {
-  // Parse the template - try JSON first, then YAML if that fails
-  let template
-  try {
-    template = JSON.parse(fileContents)
-  } catch (e) {
-    template = yaml.load(fileContents)
-  }
-  return template
-}
-
 function splitResourceType(resourceType) {
   const [vendor, service, type] = resourceType.split('::')
   return {
@@ -1366,8 +1390,5 @@ async function validateNamePattern(schema, path, value, resourceType) {
 
 module.exports = {
   cleanCloudFormation,
-  loadData,
-  collectNames,
-  splitResourceType,
   loadAllSchemas
 }
