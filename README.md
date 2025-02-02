@@ -6,6 +6,7 @@ Handy for reducing size of templates and ejecting from CDK.
 
 ## Features
 
+- Rename logical IDs and update references
 - Removes CDK-specific elements and metadata
 - Formats YAML with consistent indentation and spacing
 - Validates resources against AWS CloudFormation schemas
@@ -20,12 +21,18 @@ Handy for reducing size of templates and ejecting from CDK.
 
 ```
 npm install
+npm run download-schemas
 ```
 
 ## Usage
 
 ```
 node example.js
+
+Clean lines: 1575
+Dirty lines: 2755
+Savings: 42.83%
+Transformation complete! Output written to stack-one-clean.yml
 ```
 
 ## Other utils
