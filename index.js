@@ -34,7 +34,7 @@ function cleanCloudFormation(template) {
     indent: 2,
     lineWidth: -1,
     noRefs: true,
-    noArrayIndent: true,
+    noArrayIndent: false,
     flowStyle: false,
     styles: {
       '!!null': 'empty',
@@ -42,11 +42,16 @@ function cleanCloudFormation(template) {
     },
   });
 
+  // Fix array indentation
+  yamlContent = yamlContent.replace(/^(\s+)[^-\s].*:\n\1-\s/gm, '$1$&  ');
+
   // Apply YAML formatting
   yamlContent = yamlContent.replace(/Ref::/g, '!');
   yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1');
+  
+  /* Fold DependsOn arrays if 2 or less into a single line */
   yamlContent = yamlContent.replace(
-    /^(\s+)DependsOn:\n(?:(?:\1-\s+.+?\n){1,2})(?!\1-)/gm,
+    /^(\s+)DependsOn:\n(?:\1[\s-]+.+?\n)+/gm,
     (match) => {
       const values = match
         .split('\n')
@@ -54,6 +59,7 @@ function cleanCloudFormation(template) {
         .map(line => line.substring(line.indexOf('-') + 1).trim())
         .filter(Boolean);
 
+      // Only transform if there are 1 or 2 values
       if (values.length > 2) {
         return match;
       }
