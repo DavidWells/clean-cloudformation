@@ -270,7 +270,9 @@ async function cleanCloudFormation(template, options = {}) {
   removeCdkMetadata(template)
   removeMetadataCondition(template)
   cleanConditionNames(template)
+  /* Remove Hex postfix from resource names */
   cleanResourceNames(template)
+  /* Remove CDK tags from resources */
   removeCdkTags(template)
   transformParameterArrays(template)
   sortResourceKeys(template)
@@ -480,8 +482,10 @@ ${results.map(({ path, value, resourceType, validation }) => {
   - minLength: ${validation.minLength}
   - maxLength: ${validation.maxLength}
 `}).join('\n')}
-`
+`     
+    if(options.api){
       console.log(prompt)
+    }
     }
 
   }
@@ -1038,49 +1042,37 @@ function handleReplacement(pattern, replacement, logicalId, resource) {
   }
 }
 
-// Add this helper function before replaceLogicalIds
-function findCommonPostfixes(logicalIds, minLength = 20) {
+function findCommonRandomStringsInIds(logicalIds) {
   const postfixes = new Map(); // Map to store postfix -> count
   
-  // Helper to check if string looks random (mix of letters/numbers)
-  function looksRandom(str) {
-    // Should contain:
-    // 1. Both letters and numbers
-    // 2. At least 2 consecutive capital letters
-    return /[A-Za-z]/.test(str) && 
-           /[0-9]/.test(str) &&
-           /[A-Z]{2,}/.test(str);
-  }
-
-  // For each logical ID
+  // Look for 8-character patterns at the end of logical IDs that:
+  // 1. Can start with either letter or number
+  // 2. Can contain any mix of uppercase letters and numbers
+  // 3. Must be exactly 8 characters
+  const patterns = [
+    /[A-Z0-9]{8}/g,  // Standard pattern
+    /\d[A-Z0-9]{7}/g, // Starts with number
+    /[A-Z][0-9A-Z]{7}/g // Starts with letter
+  ];
+  
   for (const id of logicalIds) {
-    // Look for potential postfixes by checking substrings from the end
-    for (let i = minLength; i <= 40; i++) { // Max 40 chars for postfix
-      if (id.length <= i) continue;
-      
-      const potentialPostfix = id.slice(-i);
-      
-      // Skip if doesn't look random enough
-      if (!looksRandom(potentialPostfix)) continue;
-      
-      // Count this postfix
-      postfixes.set(
-        potentialPostfix, 
-        (postfixes.get(potentialPostfix) || 0) + 1
-      );
+    console.log('id', id)
+    // Try each pattern
+    for (const pattern of patterns) {
+      const matches = Array.from(id.matchAll(pattern));
+      for (const match of matches) {
+        const postfix = match[0];
+        // Must contain at least one letter and one number
+        if (/[A-Z]/.test(postfix) && /[0-9]/.test(postfix)) {
+          postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
+        }
+      }
     }
   }
 
-  // Filter to postfixes that appear multiple times
-  const commonPostfixes = Array.from(postfixes.entries())
-    .filter(([_, count]) => count > 1)
-    // Sort by frequency then length (prefer longer matches with same frequency)
-    .sort(([p1, c1], [p2, c2]) => {
-      if (c1 !== c2) return c2 - c1; // Higher count first
-      return p2.length - p1.length; // Longer postfix first
-    });
-
-  return commonPostfixes;
+  // Convert to array of [postfix, count] pairs and sort by frequency
+  return Array.from(postfixes.entries())
+    .sort(([_, c1], [__, c2]) => c2 - c1); // Sort by count descending
 }
 
 // Modify replaceLogicalIds to handle postfix removal
@@ -1090,16 +1082,16 @@ function replaceLogicalIds(template, pattern, replacement) {
   const logicalIds = Object.keys(template.Resources);
   
   // Find common postfixes before doing other replacements
-  const commonPostfixes = findCommonPostfixes(logicalIds);
-  console.log('commonPostfixes', commonPostfixes)
-  process.exit(1)
+  const commonRandomStringsInIds = findCommonRandomStringsInIds(logicalIds);
+  console.log('commonRandomStringsInIds', commonRandomStringsInIds)
+  // process.exit(1)
   
   // If we found common postfixes, add them to our replacement patterns
   const postfixReplacements = new Map();
-  for (const [postfix, count] of commonPostfixes) {
+  for (const [postfix, count] of commonRandomStringsInIds) {
     // Only consider postfixes that appear in multiple resources
-    if (count >= 2) {
-      const postfixPattern = new RegExp(`${postfix}$`);
+    if (count >= 1) {
+      const postfixPattern = new RegExp(`${postfix}`);
       postfixReplacements.set(postfixPattern, '');
     }
   }
@@ -1114,6 +1106,7 @@ function replaceLogicalIds(template, pattern, replacement) {
 
     // First apply postfix removals
     for (const [postfixPattern, postfixReplacement] of postfixReplacements) {
+      console.log('postfixPattern', postfixPattern)
       newLogicalId = newLogicalId.replace(postfixPattern, postfixReplacement);
     }
 
