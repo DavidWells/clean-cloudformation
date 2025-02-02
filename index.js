@@ -1045,26 +1045,35 @@ function handleReplacement(pattern, replacement, logicalId, resource) {
 function findCommonRandomStringsInIds(logicalIds) {
   const postfixes = new Map(); // Map to store postfix -> count
   
-  // Look for 8-character patterns at the end of logical IDs that:
-  // 1. Can start with either letter or number
-  // 2. Can contain any mix of uppercase letters and numbers
-  // 3. Must be exactly 8 characters
+  // Look for patterns at the end of logical IDs that:
+  // 1. Standard 8-char pattern (like ADDA7DEB)
+  // 2. Longer hex pattern (like 1cd5ccdaa0c6)
+  // 3. Must contain mix of letters and numbers
   const patterns = [
-    /[A-Z0-9]{8}/g,  // Standard pattern
-    /\d[A-Z0-9]{7}/g, // Starts with number
-    /[A-Z][0-9A-Z]{7}/g // Starts with letter
+    /[A-Z0-9]{8}/g,  // Standard pattern (ADDA7DEB)
+    /\d[A-Z0-9]{7}/g, // Starts with number (03AA31B2)
+    /[A-Z][0-9A-Z]{7}/g, // Starts with letter (E5522E5D)
+    /[a-f0-9]{12}$/g  // 12-char lowercase hex (1cd5ccdaa0c6)
   ];
   
   for (const id of logicalIds) {
-    console.log('id', id)
+    // console.log('id', id)
     // Try each pattern
     for (const pattern of patterns) {
       const matches = Array.from(id.matchAll(pattern));
       for (const match of matches) {
         const postfix = match[0];
-        // Must contain at least one letter and one number
-        if (/[A-Z]/.test(postfix) && /[0-9]/.test(postfix)) {
-          postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
+        // For standard patterns, must contain both letters and numbers
+        if (postfix.length === 8) {
+          if (/[A-Z]/.test(postfix) && /[0-9]/.test(postfix)) {
+            postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
+          }
+        } 
+        // For 12-char hex patterns, must contain both letters and numbers
+        else if (postfix.length === 12) {
+          if (/[a-f]/.test(postfix) && /[0-9]/.test(postfix)) {
+            postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
+          }
         }
       }
     }
@@ -1084,7 +1093,7 @@ function replaceLogicalIds(template, pattern, replacement) {
   // Find common postfixes before doing other replacements
   const commonRandomStringsInIds = findCommonRandomStringsInIds(logicalIds);
   console.log('commonRandomStringsInIds', commonRandomStringsInIds)
-  // process.exit(1)
+  process.exit(1)
   
   // If we found common postfixes, add them to our replacement patterns
   const postfixReplacements = new Map();
