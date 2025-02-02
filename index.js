@@ -38,8 +38,10 @@ function cleanCloudFormation(template) {
     flowStyle: false,
     styles: {
       '!!null': 'empty',
-      '!!str': 'plain',
+      '!!str': 'plain'
     },
+    quotingType: '"',  // Use double quotes instead of single quotes
+    forceQuotes: false // Only quote when necessary
   });
 
   // Fix array indentation
@@ -522,6 +524,38 @@ function transformParameterArrays(template) {
 }
 
 // Add this new function after transformParameterArrays
+function sortIAMPolicyProperties(resource) {
+  if (resource.Type !== 'AWS::IAM::Policy' || !resource.Properties) {
+    return resource;
+  }
+
+  const order = [
+    'PolicyName',
+    'Roles',
+    'PolicyDocument',
+  ];
+
+  const sortedProperties = {};
+  
+  // Add properties in specified order if they exist
+  order.forEach(key => {
+    if (resource.Properties[key] !== undefined) {
+      sortedProperties[key] = resource.Properties[key];
+    }
+  });
+
+  // Add any remaining properties that weren't in our order list
+  Object.keys(resource.Properties).forEach(key => {
+    if (!order.includes(key)) {
+      sortedProperties[key] = resource.Properties[key];
+    }
+  });
+
+  resource.Properties = sortedProperties;
+  return resource;
+}
+
+// Modify the sortResourceKeys function to include IAM Policy sorting
 function sortResourceKeys(template) {
   if (!template.Resources) return;
 
@@ -555,7 +589,8 @@ function sortResourceKeys(template) {
       }
     });
 
-    template.Resources[resourceKey] = sortedResource;
+    // Sort IAM Policy properties if applicable
+    template.Resources[resourceKey] = sortIAMPolicyProperties(sortedResource);
   }
 }
 
