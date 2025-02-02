@@ -107,14 +107,41 @@ function cleanCloudFormation(template, options = {}) {
   );
 
   // Collect names before any transformations
-  const names = collectNames(template);
+  const names = collectNames(template, {
+    //returnAll: true
+  });
 
   // Log collected names at the end
   if (names.length > 0) {
-    console.log('\nFound the following resource names:');
-    names.forEach(({ path, value }) => {
-      console.log(`${path}: ${value}`);
+    console.log('\nFound the following resource names that probably need renaming:');
+    
+    // Get longest resource type
+    const longestResourceType = names.reduce((max, { resourceType }) => {
+      return Math.max(max, resourceType.length);
+    }, 0);
+
+    names.forEach(({ path, value, resourceType }) => {
+      console.log('--------------------------------');
+      console.log(`Resource: ${resourceType}`);
+      console.log(`Path:     ${path}`);
+      console.log(`Value:    ${value}`);
     });
+
+    if (options.asPrompt) {
+      const prompt = `
+Please rename the following resources to be more descriptive and easier to understand.
+
+Rules:
+- Resource names must be unique within the template.
+- Use !Sub and AWS::StackName to create unique names. For example: !Sub "\${AWS::StackName}-[resource-name]"
+- Resource names must be less than 20 characters.
+- Resource names must be alphanumeric.
+
+${names.map(({ path, value, resourceType }) => `${resourceType} ${path}: ${value}`).join('\n')}
+`
+      console.log(prompt)
+    }
+
   }
 
   return yamlContent;
@@ -194,7 +221,6 @@ function sortTopLevelKeys(template) {
 
   return sortedTemplate;
 }
-
 
 // Function to recursively remove aws:cdk:path and cfn_nag from Metadata
 function cleanMetadata(obj) {
@@ -763,14 +789,23 @@ const ignorePaths = [
 ]
 
 // Add this new function to collect names
-function collectNames(template) {
+function collectNames(template, options = {}) {
+  const defaultOptions = {
+    returnAll: false
+  }
+  options = { ...defaultOptions, ...options }
   const names = new Set();
   
-  function findNames(obj, path = []) {
+  function findNames(obj, path = [], resourceType = null) {
     if (!obj || typeof obj !== 'object') return;
 
+    // If we're at a resource root, get its type
+    if (path.length === 2 && path[0] === 'Resources' && obj.Type) {
+      resourceType = obj.Type;
+    }
+
     if (Array.isArray(obj)) {
-      obj.forEach((item, index) => findNames(item, [...path, index]));
+      obj.forEach((item, index) => findNames(item, [...path, index], resourceType));
       return;
     }
 
@@ -786,21 +821,27 @@ function collectNames(template) {
            key.endsWith('Name'))
         ) {
         
-        if (ignoreNames.includes(key)) {
+        if (ignoreNames.includes(key) && !options.returnAll) {
           return;
         }
-
         const keyPath = [...path, key].join('.')
-        if (ignorePaths.some(ignorePath => keyPath.includes(ignorePath))) {
+
+        if (resourceType === 'AWS::DynamoDB::Table' && keyPath.includes('GlobalSecondaryIndexes') && !options.returnAll) {
+          console.log(path, key)
+          return
+        }
+
+        if (ignorePaths.some(ignorePath => keyPath.includes(ignorePath)) && !options.returnAll) {
           return;
         }
 
         names.add({
           path: keyPath,
-          value: value
+          value: value,
+          resourceType: resourceType
         });
       } else if (typeof value === 'object') {
-        findNames(value, [...path, key]);
+        findNames(value, [...path, key], resourceType);
       }
     }
   }
@@ -815,6 +856,7 @@ function test() {
   const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
   const template = loadData(fileContents)
   const cleanedYaml = cleanCloudFormation(template, {
+    asPrompt: true,
     replaceLogicalIds: [
       {
         pattern: 'Passwordless', 
