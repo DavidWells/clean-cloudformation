@@ -1,4 +1,5 @@
-const fs = require('fs')
+const fs = require('fs').promises
+const fsSync = require('fs')
 const yaml = require('js-yaml')
 const path = require('path')
 const Ajv = require('ajv')
@@ -41,53 +42,49 @@ ajv.addKeyword({
 
 const schemaCache = new Map()
 
-// Load all schemas once at startup
-async function loadAllSchemas() {
-  const schemasDir = path.join(__dirname, 'schemas');
-  const schemaFiles = fs.readdirSync(schemasDir);
-  
-  // First load all schemas to make them available for reference resolution
-  for (const file of schemaFiles) {
-    if (file.endsWith('.json') && file !== '_meta.json') {
-      try {
-        const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, file), 'utf8'));
-        // Store the raw schema first
-        schemaCache.set(schema.typeName, schema);
-      } catch (err) {
-        console.error(`Error loading schema file ${file}:`, err.message);
-      }
-    }
+// Load a single schema by resource type
+async function loadSchema(resourceType) {
+  if (schemaCache.has(resourceType)) {
+    return schemaCache.get(resourceType);
   }
 
-  // Then dereference each schema
-  // for (const [typeName, schema] of schemaCache.entries()) {
-  //   try {
-  //     // Create a bundle with all definitions included
-  //     const dereferencedSchema = await $RefParser.dereference(schema, {
-  //       resolve: {
-  //         file: {
-  //           order: 1,
-  //           canRead: true,
-  //           read: (file, callback) => {
-  //             const basename = path.basename(file.url);
-  //             const typeName = basename.replace('.json', '');
-  //             const schema = schemaCache.get(typeName);
-  //             callback(null, schema);
-  //           }
-  //         }
-  //       }
-  //     });
-      
-  //     // Replace the raw schema with dereferenced version
-  //     schemaCache.set(typeName, dereferencedSchema);
-  //   } catch (err) {
-  //     console.error(`Error dereferencing schema for ${typeName}:`, err.message);
-  //   }
-  // }
+  try {
+    const schemaPath = path.join(__dirname, 'schemas', `${resourceType}.json`);
+    const content = await fs.readFile(schemaPath, 'utf8');
+    const schema = JSON.parse(content);
+    schemaCache.set(resourceType, schema);
+    return schema;
+  } catch (err) {
+    console.warn(`Warning: Could not load schema for ${resourceType}:`, err.message);
+    return null;
+  }
 }
 
-// Load schemas at startup
-loadAllSchemas();
+// Add after loadSchema function
+async function loadAllSchemas() {
+  try {
+    const schemasDir = path.join(__dirname, 'schemas');
+    const schemaFiles = await fs.readdir(schemasDir);
+    
+    // Load all schemas in parallel
+    await Promise.all(schemaFiles.map(async file => {
+      if (file.endsWith('.json') && file !== '_meta.json') {
+        try {
+          const content = await fs.readFile(path.join(schemasDir, file), 'utf8');
+          const schema = JSON.parse(content);
+          schemaCache.set(schema.typeName, schema);
+        } catch (err) {
+          console.warn(`Warning: Could not load schema file ${file}:`, err.message);
+        }
+      }
+    }));
+
+    return schemaCache;
+  } catch (err) {
+    console.error('Error loading schemas:', err.message);
+    throw err;
+  }
+}
 
 function hasIntrinsicFunction(value, path = []) {
   if (!value || typeof value !== 'object') return false;
@@ -145,14 +142,14 @@ function validateRequiredProperties(schema, properties, logicalId, resourceType)
   return isValid;
 }
 
-function validateResource(resourceType, properties, logicalId) {
+async function validateResource(resourceType, properties, logicalId) {
   // Skip validation for Custom:: resources
   if (resourceType.startsWith('Custom::')) {
     // console.warn(`Warning: Skipping validation for custom resource type ${resourceType}`);
     return true;
   }
 
-  const schema = schemaCache.get(resourceType);
+  const schema = await loadSchema(resourceType);
   if (!schema) {
     console.warn(`Warning: No schema found for resource type ${resourceType}`);
     return true;
@@ -229,28 +226,31 @@ function validateResource(resourceType, properties, logicalId) {
   }
 }
 
-function validateTemplate(template) {
+async function validateTemplate(template) {
   let isValid = true;
   
   if (!template.Resources) return isValid;
 
-  for (const [logicalId, resource] of Object.entries(template.Resources)) {
+  // Process all resources in parallel
+  const validations = Object.entries(template.Resources).map(async ([logicalId, resource]) => {
     if (!resource.Type) {
       console.error(`Resource ${logicalId} missing Type property`);
-      isValid = false;
-      continue;
+      return false;
     }
 
-    const props = resource.Properties || {}
-
-    const resourceValid = validateResource(resource.Type, props, logicalId);
+    const props = resource.Properties || {};
+    const resourceValid = await validateResource(resource.Type, props, logicalId);
+    
     if (!resourceValid) {
       console.error(`Invalid properties in resource ${logicalId} (${resource.Type})`);
-      isValid = false;
+      return false;
     }
-  }
+    return true;
+  });
 
-  return isValid;
+  // Wait for all validations to complete
+  const results = await Promise.all(validations);
+  return results.every(result => result);
 }
 
 async function cleanCloudFormation(template, options = {}) {
@@ -287,7 +287,7 @@ async function cleanCloudFormation(template, options = {}) {
   const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template));
   
   // Validate the transformed template
-  const isValid = validateTemplate(transformedTemplate);
+  const isValid = await validateTemplate(transformedTemplate);
 
   if (!isValid && options.strict) {
     throw new Error('Template validation failed');
@@ -376,12 +376,58 @@ async function cleanCloudFormation(template, options = {}) {
       return Math.max(max, resourceType.length);
     }, 0);
 
-    names.forEach(({ path, value, resourceType }) => {
-      console.log('--------------------------------');
-      console.log(`Resource: ${resourceType}`);
-      console.log(`Path:     ${path}`);
-      console.log(`Value:    ${value}`);
+    // Lookup naming constraints from schema file
+    const details = names.map(async ({ path, value, resourceType }) => {
+      // console.log('--------------------------------');
+      // console.log(`Resource: ${resourceType}`);
+      // console.log(`Path:     ${path}`);
+      // console.log(`Value:    ${value}`);
+      
+      const schema = await loadSchema(resourceType);
+      const validation = await validateNamePattern(schema, path, value, resourceType);
+      
+      // if (validation.constraints) {
+      //   console.log(`\nNaming Convention for ${resourceType} - ${path}:`);
+      //   console.log(`Description: ${validation.description}`);
+      //   if (validation.constraints.pattern) {
+      //     console.log(`Pattern:     ${validation.constraints.pattern}`);
+      //   }
+      //   if (validation.constraints.minLength !== undefined) {
+      //     console.log(`Min Length:  ${validation.constraints.minLength}`);
+      //   }
+      //   if (validation.constraints.maxLength !== undefined) {
+      //     console.log(`Max Length:  ${validation.constraints.maxLength}`);
+      //   }
+      //   if (validation.constraints.enum) {
+      //     console.log(`Allowed Values: ${validation.constraints.enum.join(', ')}`);
+      //   }
+      //   if (!validation.isValid) {
+      //     console.log('\nValidation Errors:');
+      //     validation.validationErrors.forEach(error => {
+      //       console.log(`- ${error}`);
+      //     });
+      //   }
+      // }
+
+      const constraints = validation.constraints || {}
+
+      return {
+        path,
+        value,
+        resourceType,
+        validation: {
+          description: validation.description || `See ${resourceType} CloudFormation schema for details`,
+          pattern: constraints.pattern || /^[a-zA-Z0-9-]{1,128}$/,
+          minLength: constraints.minLength || 1,
+          maxLength: constraints.maxLength || 128,
+          // enum: constraints.enum,
+          // isValid: validation.isValid,
+          // validationErrors: validation.validationErrors
+        }
+      }
     });
+
+    const results = await Promise.all(details);
 
     if (options.asPrompt) {
       const prompt = `
@@ -390,10 +436,20 @@ Please rename the following resources to be more descriptive and easier to under
 Rules:
 - Resource names must be unique within the template.
 - Use !Sub and AWS::StackName to create unique names. For example: !Sub "\${AWS::StackName}-[resource-name]"
-- Resource names must be less than 20 characters.
+- Resource names must follow AWS rules and naming conventions for the given CloudFormation resourceType.
 - Resource names must be alphanumeric.
 
-${names.map(({ path, value, resourceType }) => `${resourceType} ${path}: ${value}`).join('\n')}
+Update the below resources to be more descriptive and easier to understand, following the rules above.
+
+${results.map(({ path, value, resourceType, validation }) => {
+  return `- Value: ${value}
+  - location: ${path}
+  - resourceType: ${resourceType}
+  - description: ${validation.description}
+  - pattern: ${validation.pattern}
+  - minLength: ${validation.minLength}
+  - maxLength: ${validation.maxLength}
+`}).join('\n')}
 `
       console.log(prompt)
     }
@@ -904,7 +960,7 @@ function insertBlankLines(content) {
   )
 }
 
-function loadData(fileContents) {
+async function loadData(fileContents) {
   // Parse the template - try JSON first, then YAML if that fails
   let template;
   try {
@@ -912,8 +968,7 @@ function loadData(fileContents) {
   } catch (e) {
     template = yaml.load(fileContents);
   }
-
-  return template
+  return template;
 }
 
 function splitResourceType(resourceType) {
@@ -1107,9 +1162,96 @@ function collectNames(template, options = {}) {
   return Array.from(names).sort((a, b) => a.path.localeCompare(b.path));
 }
 
+async function validateNamePattern(schema, path, value, resourceType) {
+  // Skip if no schema
+  if (!schema) return {}
+
+  // Split path into parts and remove 'Resources' prefix
+  const pathParts = path.split('.').slice(1);
+  
+  // Navigate through schema to find the property definition
+  let currentSchema = schema;
+  let propertyDef = null;
+  
+  for (const part of pathParts) {
+    if (!currentSchema) break;
+    
+    // Check properties
+    if (currentSchema.properties && currentSchema.properties[part]) {
+      currentSchema = currentSchema.properties[part];
+    }
+    // Check if it references a definition
+    else if (currentSchema.$ref) {
+      const defName = currentSchema.$ref.split('/').pop();
+      if (schema.definitions && schema.definitions[defName]) {
+        currentSchema = schema.definitions[defName];
+        // Check the next part in the definition's properties
+        if (currentSchema.properties && currentSchema.properties[part]) {
+          currentSchema = currentSchema.properties[part];
+        }
+      }
+    }
+    // Store the last valid schema we found
+    propertyDef = currentSchema;
+  }
+
+  // If we found a property definition with string constraints, validate it
+  if (propertyDef && propertyDef.type === 'string') {
+    const constraints = {
+      pattern: propertyDef.pattern,
+      minLength: propertyDef.minLength,
+      maxLength: propertyDef.maxLength,
+      enum: propertyDef.enum
+    };
+
+    let isValid = true;
+    const validationErrors = [];
+
+    // Check pattern if exists
+    if (constraints.pattern) {
+      try {
+        const regex = new RegExp(constraints.pattern);
+        if (!regex.test(value)) {
+          isValid = false;
+          validationErrors.push(`must match pattern: ${constraints.pattern}`);
+        }
+      } catch (err) {
+        console.warn(`Warning: Invalid regex pattern in schema: ${constraints.pattern}`);
+      }
+    }
+
+    // Check length constraints
+    if (constraints.minLength !== undefined && value.length < constraints.minLength) {
+      isValid = false;
+      validationErrors.push(`length must be >= ${constraints.minLength}`);
+    }
+    if (constraints.maxLength !== undefined && value.length > constraints.maxLength) {
+      isValid = false;
+      validationErrors.push(`length must be <= ${constraints.maxLength}`);
+    }
+
+    // Check enum if exists
+    if (constraints.enum && !constraints.enum.includes(value)) {
+      isValid = false;
+      validationErrors.push(`must be one of: ${constraints.enum.join(', ')}`);
+    }
+
+    return {
+      isValid,
+      pattern: constraints.pattern,
+      description: propertyDef.description,
+      constraints,
+      validationErrors
+    };
+  }
+
+  return {};
+}
+
 module.exports = {
   cleanCloudFormation,
   loadData,
   collectNames,
-  splitResourceType
+  splitResourceType,
+  loadAllSchemas
 };

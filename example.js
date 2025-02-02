@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('fs').promises;
 const yaml = require('js-yaml');
 const { cleanCloudFormation, loadData } = require('./index');
 
@@ -13,8 +13,10 @@ function outputDirty(fileContents) {
 }
 
 async function example() {
-  const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
-  const template = loadData(fileContents);
+  // Read input file
+  const fileContents = await fs.readFile('./fixtures/passwordless.json', 'utf8');
+  const template = await loadData(fileContents);
+  
   const cleanedYaml = await cleanCloudFormation(template, {
     asPrompt: true,
     replaceLogicalIds: [
@@ -40,15 +42,15 @@ async function example() {
     ]
   })
   
-  // Save both the cleaned version and the original as YAML
-  fs.writeFileSync('outputs/clean-passwordless.yaml', cleanedYaml);
-  
-  const dirtyYaml = outputDirty(fileContents);
-  fs.writeFileSync('outputs/dirty-passwordless.yaml', dirtyYaml);
+  // Save both versions in parallel
+  await Promise.all([
+    fs.writeFile('outputs/clean-passwordless.yaml', cleanedYaml),
+    fs.writeFile('outputs/dirty-passwordless.yaml', outputDirty(fileContents))
+  ]);
 
   // Log the number of lines in the cleaned and dirty files
   const cleanLines = cleanedYaml.split('\n').length;
-  const dirtyLines = dirtyYaml.split('\n').length;
+  const dirtyLines = outputDirty(fileContents).split('\n').length;
   console.log(`Clean lines: ${cleanLines}`);
   console.log(`Dirty lines: ${dirtyLines}`);
   // Log savings
