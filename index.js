@@ -11,10 +11,10 @@ const ajv = new Ajv({
   validateFormats: false, // Disable format validation
   validateSchema: false,  // Disable schema validation
   allowUnionTypes: true,  // Allow union types
-});
+})
 
+/* // Debug regex validation. DO NOT REMOVE
 // Override the existing pattern keyword
-/*
 ajv.removeKeyword('pattern');
 ajv.addKeyword({
   keyword: 'pattern',
@@ -118,10 +118,37 @@ function hasIntrinsicFunction(value, path = []) {
   return false;
 }
 
+function validateRequiredProperties(schema, properties, logicalId, resourceType) {
+  if (!schema.required || !Array.isArray(schema.required)) {
+    return true;
+  }
+
+  let isValid = true;
+  const missingProps = [];
+
+  for (const requiredProp of schema.required) {
+    // Check if property exists, even if it's an intrinsic function
+    if (!(requiredProp in properties)) {
+      missingProps.push(requiredProp);
+      isValid = false;
+    }
+  }
+
+  if (missingProps.length > 0) {
+    console.log('───────────────────────────────');
+    console.error(`\nMissing required properties in \n"${logicalId}" for ${resourceType}:`);
+    missingProps.forEach(prop => {
+      console.error(`- ${prop}`);
+    });
+  }
+
+  return isValid;
+}
+
 function validateResource(resourceType, properties, logicalId) {
   // Skip validation for Custom:: resources
   if (resourceType.startsWith('Custom::')) {
-    console.warn(`Warning: Skipping validation for custom resource type ${resourceType}`);
+    // console.warn(`Warning: Skipping validation for custom resource type ${resourceType}`);
     return true;
   }
 
@@ -130,6 +157,9 @@ function validateResource(resourceType, properties, logicalId) {
     console.warn(`Warning: No schema found for resource type ${resourceType}`);
     return true;
   }
+
+  // First validate required properties
+  const requiredValid = validateRequiredProperties(schema, properties, logicalId, resourceType);
 
   try {
     // Get or compile validator for this schema
@@ -140,6 +170,7 @@ function validateResource(resourceType, properties, logicalId) {
         properties: schema.properties || {},
         definitions: schema.definitions || {},
         additionalProperties: false
+        // Note: We're not including required here since we handle it separately
       };
 
       const validator = ajv.compile(validationSchema);
@@ -190,7 +221,7 @@ function validateResource(resourceType, properties, logicalId) {
       });
     }
 
-    return valid;
+    return valid && requiredValid;  // Both validations must pass
   } catch (err) {
     console.error(`Error validating ${resourceType} in "${logicalId}":`, err.message);
     console.error('Stack:', err.stack);
@@ -210,12 +241,9 @@ function validateTemplate(template) {
       continue;
     }
 
-    if (!resource.Properties) {
-      console.warn(`Warning: Resource ${logicalId} has no Properties`);
-      continue;
-    }
+    const props = resource.Properties || {}
 
-    const resourceValid = validateResource(resource.Type, resource.Properties, logicalId);
+    const resourceValid = validateResource(resource.Type, props, logicalId);
     if (!resourceValid) {
       console.error(`Invalid properties in resource ${logicalId} (${resource.Type})`);
       isValid = false;
@@ -230,10 +258,8 @@ async function cleanCloudFormation(template, options = {}) {
     throw new Error('Template is required')
   }
   /*
-
   console.log('template', template)
   /** */
-
 
   // Clean CDK-specific elements
   removeRootCdkNag(template);
@@ -262,7 +288,7 @@ async function cleanCloudFormation(template, options = {}) {
   
   // Validate the transformed template
   const isValid = validateTemplate(transformedTemplate);
-  process.exit(1)
+
   if (!isValid && options.strict) {
     throw new Error('Template validation failed');
   }
@@ -1081,58 +1107,9 @@ function collectNames(template, options = {}) {
   return Array.from(names).sort((a, b) => a.path.localeCompare(b.path));
 }
 
-async function test() {
-  const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
-  const template = loadData(fileContents);
-  const cleanedYaml = await cleanCloudFormation(template, {
-    asPrompt: true,
-    replaceLogicalIds: [
-      {
-        pattern: 'Passwordless', 
-        replacement: '' 
-      },
-      {
-        pattern: /Passwordless$/,
-        replacement: (payload) => {
-          const { logicalId, resourceDetails } = payload
-          const { name } = resourceDetails
-          return logicalId.replace(/Passwordless$/, '').replace(name, '')
-        }
-      },
-      {
-        pattern: /Passwordless/gi,
-        replacement: (payload) => {
-          const { logicalId, resourceDetails, pattern } = payload
-          return logicalId.replace(pattern, '')
-        }
-      }
-    ]
-  });
-  
-  // Save both the cleaned version and the original as YAML
-  fs.writeFileSync('outputs/clean-passwordless.yaml', cleanedYaml);
-
-  const dirtyYaml = yaml.dump(yaml.load(fileContents), {
-    indent: 2,
-    lineWidth: -1,
-    noRefs: true,
-    noArrayIndent: true,
-    flowStyle: false,
-  })
-  fs.writeFileSync('outputs/dirty-passwordless.yaml', dirtyYaml);
-
-  // Log the number of lines in the cleaned and dirty files
-  const cleanLines = cleanedYaml.split('\n').length;
-  const dirtyLines = dirtyYaml.split('\n').length;
-  console.log(`Clean lines: ${cleanLines}`);
-  console.log(`Dirty lines: ${dirtyLines}`);
-  // Log savings
-  const savings = ((dirtyLines - cleanLines) / dirtyLines) * 100;
-  console.log(`Savings: ${savings.toFixed(2)}%`);
-  console.log('Transformation complete! Output written to clean-passwordless.yaml');
-}
-
-test().catch(err => {
-  console.error('Error:', err);
-  process.exit(1);
-});
+module.exports = {
+  cleanCloudFormation,
+  loadData,
+  collectNames,
+  splitResourceType
+};

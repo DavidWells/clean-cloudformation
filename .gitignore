@@ -9,7 +9,7 @@
 public/_data
 public/data
 # remote content
-sources
+schemas
 outputs
 
 # testing
