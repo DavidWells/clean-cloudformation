@@ -52,6 +52,7 @@ function updateSchemaContents(content = '', filePath = '') {
     [/\{1,512\}\\\\Z"/gm, `{1,512}$"`],
     [/\\\\Z"\s*\n/gm, `$"\n`],
     [/\+\{1,255\}\$"/gm,  `{1,255}$"`],
+    ["\\[a-zA-Z0-9_-:/]+", "\\[[a-zA-Z0-9_\\-:/]+]"]
   ]
   for (const [pattern, replacement] of replacements) {
     const pat = (pattern instanceof RegExp) ? pattern : new RegExp(pattern)

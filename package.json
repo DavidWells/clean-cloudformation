@@ -4,12 +4,13 @@
   "description": "Script to clean CloudFormation templates",
   "main": "index.js",
   "scripts": {
-    "download-schema": "node scripts/download-cloudformation-schema.js"
+    "download-schemas": "node scripts/download-cloudformation-schema.js"
   },
   "dependencies": {
-    "js-yaml": "^4.1.0",
-    "adm-zip": "^0.5.10",
     "ajv": "^8.12.0",
-    "@apidevtools/json-schema-ref-parser": "^9.0.9"
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.16"
   }
 }
