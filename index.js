@@ -60,30 +60,30 @@ async function loadAllSchemas() {
   }
 
   // Then dereference each schema
-  for (const [typeName, schema] of schemaCache.entries()) {
-    try {
-      // Create a bundle with all definitions included
-      const dereferencedSchema = await $RefParser.dereference(schema, {
-        resolve: {
-          file: {
-            order: 1,
-            canRead: true,
-            read: (file, callback) => {
-              const basename = path.basename(file.url);
-              const typeName = basename.replace('.json', '');
-              const schema = schemaCache.get(typeName);
-              callback(null, schema);
-            }
-          }
-        }
-      });
+  // for (const [typeName, schema] of schemaCache.entries()) {
+  //   try {
+  //     // Create a bundle with all definitions included
+  //     const dereferencedSchema = await $RefParser.dereference(schema, {
+  //       resolve: {
+  //         file: {
+  //           order: 1,
+  //           canRead: true,
+  //           read: (file, callback) => {
+  //             const basename = path.basename(file.url);
+  //             const typeName = basename.replace('.json', '');
+  //             const schema = schemaCache.get(typeName);
+  //             callback(null, schema);
+  //           }
+  //         }
+  //       }
+  //     });
       
-      // Replace the raw schema with dereferenced version
-      schemaCache.set(typeName, dereferencedSchema);
-    } catch (err) {
-      console.error(`Error dereferencing schema for ${typeName}:`, err.message);
-    }
-  }
+  //     // Replace the raw schema with dereferenced version
+  //     schemaCache.set(typeName, dereferencedSchema);
+  //   } catch (err) {
+  //     console.error(`Error dereferencing schema for ${typeName}:`, err.message);
+  //   }
+  // }
 }
 
 // Load schemas at startup
