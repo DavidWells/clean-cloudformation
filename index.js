@@ -1,7 +1,7 @@
 const fs = require('fs')
 const yaml = require('js-yaml')
 
-function cleanCloudFormation(template) {
+function cleanCloudFormation(template, options = {}) {
   if (!template) {
     throw new Error('Template is required')
   }
@@ -26,8 +26,16 @@ function cleanCloudFormation(template) {
   transformParameterArrays(template);
   sortResourceKeys(template);
 
+  /* Handle logical ID replacements if specified */
+  if (options.replaceLogicalIds) {
+    for (const { pattern, replacement } of options.replaceLogicalIds) {
+      replaceLogicalIds(template, pattern, replacement);
+    }
+  }
+
   // Transform and sort
   const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template));
+  
 
   // Convert to YAML
   let yamlContent = yaml.dump(transformedTemplate, {
@@ -619,7 +627,18 @@ function test() {
   // Use the function at the bottom of the file
   const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
   const template = loadData(fileContents)
-  const cleanedYaml = cleanCloudFormation(template);
+  const cleanedYaml = cleanCloudFormation(template, {
+    replaceLogicalIds: [
+      {
+        pattern: 'Passwordless', 
+        replacement: '' 
+      },
+      {
+        pattern: /Passwordless$/,
+        replacement: 'ENDING'
+      }
+    ]
+  });
   
   // Save both the cleaned version and the original as YAML
   fs.writeFileSync('outputs/clean-passwordless.yaml', cleanedYaml);
@@ -642,6 +661,97 @@ function test() {
   const savings = ((dirtyLines - cleanLines) / dirtyLines) * 100;
   console.log(`Savings: ${savings.toFixed(2)}%`);
   console.log('Transformation complete! Output written to clean-passwordless.yaml');
+}
+
+// Add this new function to handle logical ID replacements
+function replaceLogicalIds(template, pattern, replacement) {
+  if (!template.Resources) return;
+
+  const replacements = {};
+  const existingNames = new Set(Object.keys(template.Resources));
+  const proposedNames = new Map(); // Track all proposed new names
+
+  // First pass: identify resources to rename and check for collisions
+  for (const logicalId of Object.keys(template.Resources)) {
+    let newLogicalId;
+    if (typeof pattern === 'string') {
+      // String replacement
+      newLogicalId = logicalId.replace(pattern, replacement);
+    } else if (pattern instanceof RegExp) {
+      // Regex replacement
+      newLogicalId = logicalId.replace(pattern, replacement);
+    }
+
+    if (newLogicalId && newLogicalId !== logicalId) {
+      // Check if the new name would collide with:
+      // 1. An existing resource that won't be renamed
+      // 2. Another resource that would be renamed to the same name
+      const wouldCollide = (
+        (existingNames.has(newLogicalId) && !proposedNames.has(logicalId)) || 
+        Array.from(proposedNames.values()).includes(newLogicalId)
+      );
+
+      if (wouldCollide) {
+        console.warn(`Warning: Skipping rename of '${logicalId}' to '${newLogicalId}' due to potential collision`);
+        continue;
+      }
+
+      proposedNames.set(logicalId, newLogicalId);
+      replacements[logicalId] = newLogicalId;
+    }
+  }
+
+  // Helper function to update references
+  function updateReferences(obj) {
+    if (!obj || typeof obj !== 'object') return;
+
+    if (Array.isArray(obj)) {
+      // Handle DependsOn arrays
+      if (obj.some(item => typeof item === 'string' && replacements[item])) {
+        for (let i = 0; i < obj.length; i++) {
+          if (typeof obj[i] === 'string' && replacements[obj[i]]) {
+            obj[i] = replacements[obj[i]];
+          }
+        }
+      } else {
+        obj.forEach(item => updateReferences(item));
+      }
+      return;
+    }
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === 'Ref' && typeof value === 'string' && replacements[value]) {
+        obj[key] = replacements[value];
+      } else if (key === 'Fn::GetAtt' && Array.isArray(value) && replacements[value[0]]) {
+        value[0] = replacements[value[0]];
+      } else if (key === 'DependsOn') {
+        if (typeof value === 'string' && replacements[value]) {
+          obj[key] = replacements[value];
+        } else if (Array.isArray(value)) {
+          for (let i = 0; i < value.length; i++) {
+            if (typeof value[i] === 'string' && replacements[value[i]]) {
+              value[i] = replacements[value[i]];
+            }
+          }
+        }
+      } else if (typeof value === 'object') {
+        updateReferences(value);
+      }
+    }
+  }
+
+  // Second pass: rename resources and update references
+  for (const [oldId, newId] of Object.entries(replacements)) {
+    template.Resources[newId] = template.Resources[oldId];
+    delete template.Resources[oldId];
+  }
+
+  // Update all references
+  updateReferences(template.Resources);
+  updateReferences(template.Outputs);
+  if (template.Conditions) {
+    updateReferences(template.Conditions);
+  }
 }
 
 test()
