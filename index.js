@@ -623,44 +623,32 @@ function loadData(fileContents) {
   return template
 }
 
-function test() {
-  // Use the function at the bottom of the file
-  const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
-  const template = loadData(fileContents)
-  const cleanedYaml = cleanCloudFormation(template, {
-    replaceLogicalIds: [
-      {
-        pattern: 'Passwordless', 
-        replacement: '' 
-      },
-      {
-        pattern: /Passwordless$/,
-        replacement: 'ENDING'
-      }
-    ]
-  });
-  
-  // Save both the cleaned version and the original as YAML
-  fs.writeFileSync('outputs/clean-passwordless.yaml', cleanedYaml);
+function splitResourceType(resourceType) {
+  const [vendor, service, type] = resourceType.split('::')
+  return {
+    vendor,
+    service,
+    type,
+    name: service + type
+  }
+}
 
-  const dirtyYaml = yaml.dump(yaml.load(fileContents), {
-    indent: 2,
-    lineWidth: -1,
-    noRefs: true,
-    noArrayIndent: true,
-    flowStyle: false,
-  })
-  fs.writeFileSync('outputs/dirty-passwordless.yaml', dirtyYaml);
 
-  // Log the number of lines in the cleaned and dirty files
-  const cleanLines = cleanedYaml.split('\n').length;
-  const dirtyLines = dirtyYaml.split('\n').length;
-  console.log(`Clean lines: ${cleanLines}`);
-  console.log(`Dirty lines: ${dirtyLines}`);
-  // Log savings
-  const savings = ((dirtyLines - cleanLines) / dirtyLines) * 100;
-  console.log(`Savings: ${savings.toFixed(2)}%`);
-  console.log('Transformation complete! Output written to clean-passwordless.yaml');
+function handleReplacement(pattern, replacement, logicalId, resource) {
+  if (typeof replacement === 'string') {
+    return logicalId.replace(pattern, replacement);
+  } else if (replacement instanceof RegExp) {
+    return logicalId.replace(pattern, replacement);
+  } else if (typeof replacement === 'function') {
+    const resourceDetails = splitResourceType(resource.Type)
+    const payload = {
+      logicalId,
+      resourceDetails,
+      resource,
+      pattern
+    }
+    return replacement(payload);
+  }
 }
 
 // Add this new function to handle logical ID replacements
@@ -676,10 +664,10 @@ function replaceLogicalIds(template, pattern, replacement) {
     let newLogicalId;
     if (typeof pattern === 'string') {
       // String replacement
-      newLogicalId = logicalId.replace(pattern, replacement);
+      newLogicalId = handleReplacement(pattern, replacement, logicalId, template.Resources[logicalId]);
     } else if (pattern instanceof RegExp) {
       // Regex replacement
-      newLogicalId = logicalId.replace(pattern, replacement);
+      newLogicalId = handleReplacement(pattern, replacement, logicalId, template.Resources[logicalId]);
     }
 
     if (newLogicalId && newLogicalId !== logicalId) {
@@ -752,6 +740,57 @@ function replaceLogicalIds(template, pattern, replacement) {
   if (template.Conditions) {
     updateReferences(template.Conditions);
   }
+}
+
+function test() {
+  // Use the function at the bottom of the file
+  const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
+  const template = loadData(fileContents)
+  const cleanedYaml = cleanCloudFormation(template, {
+    replaceLogicalIds: [
+      {
+        pattern: 'Passwordless', 
+        replacement: '' 
+      },
+      {
+        pattern: /Passwordless$/,
+        replacement: (payload) => {
+          const { logicalId, resourceDetails } = payload
+          const { name } = resourceDetails
+          return logicalId.replace(/Passwordless$/, '').replace(name, '')
+        }
+      },
+      {
+        pattern: /Passwordless/gi,
+        replacement: (payload) => {
+          const { logicalId, resourceDetails, pattern } = payload
+          return logicalId.replace(pattern, '')
+        }
+      }
+    ]
+  });
+  
+  // Save both the cleaned version and the original as YAML
+  fs.writeFileSync('outputs/clean-passwordless.yaml', cleanedYaml);
+
+  const dirtyYaml = yaml.dump(yaml.load(fileContents), {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    noArrayIndent: true,
+    flowStyle: false,
+  })
+  fs.writeFileSync('outputs/dirty-passwordless.yaml', dirtyYaml);
+
+  // Log the number of lines in the cleaned and dirty files
+  const cleanLines = cleanedYaml.split('\n').length;
+  const dirtyLines = dirtyYaml.split('\n').length;
+  console.log(`Clean lines: ${cleanLines}`);
+  console.log(`Dirty lines: ${dirtyLines}`);
+  // Log savings
+  const savings = ((dirtyLines - cleanLines) / dirtyLines) * 100;
+  console.log(`Savings: ${savings.toFixed(2)}%`);
+  console.log('Transformation complete! Output written to clean-passwordless.yaml');
 }
 
 test()
