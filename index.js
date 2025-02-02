@@ -1,7 +1,231 @@
 const fs = require('fs')
 const yaml = require('js-yaml')
+const path = require('path')
+const Ajv = require('ajv')
+const $RefParser = require('@apidevtools/json-schema-ref-parser')
 
-function cleanCloudFormation(template, options = {}) {
+// Create AJV instance with schema loading capability
+const ajv = new Ajv({
+  allErrors: true,
+  strict: false,
+  validateFormats: false, // Disable format validation
+  validateSchema: false,  // Disable schema validation
+  allowUnionTypes: true,  // Allow union types
+});
+
+// Override the existing pattern keyword
+/*
+ajv.removeKeyword('pattern');
+ajv.addKeyword({
+  keyword: 'pattern',
+  type: 'string',
+  schemaType: 'string',
+  compile: (pattern) => {
+    try {
+      const regex = new RegExp(pattern);
+      return (data) => {
+        try {
+          return typeof data === 'string' && regex.test(data);
+        } catch (e) {
+          console.warn(`Warning: Error testing pattern ${pattern}:`, e.message);
+          return true; // Skip validation on error
+        }
+      };
+    } catch (e) {
+      console.warn(`Warning: Invalid regex pattern in schema: ${pattern}`);
+      return () => true; // Skip validation for invalid patterns
+    }
+  }
+});
+/** */
+
+const schemaCache = new Map()
+
+// Load all schemas once at startup
+async function loadAllSchemas() {
+  const schemasDir = path.join(__dirname, 'schemas');
+  const schemaFiles = fs.readdirSync(schemasDir);
+  
+  // First load all schemas to make them available for reference resolution
+  for (const file of schemaFiles) {
+    if (file.endsWith('.json') && file !== '_meta.json') {
+      try {
+        const schema = JSON.parse(fs.readFileSync(path.join(schemasDir, file), 'utf8'));
+        // Store the raw schema first
+        schemaCache.set(schema.typeName, schema);
+      } catch (err) {
+        console.error(`Error loading schema file ${file}:`, err.message);
+      }
+    }
+  }
+
+  // Then dereference each schema
+  for (const [typeName, schema] of schemaCache.entries()) {
+    try {
+      // Create a bundle with all definitions included
+      const dereferencedSchema = await $RefParser.dereference(schema, {
+        resolve: {
+          file: {
+            order: 1,
+            canRead: true,
+            read: (file, callback) => {
+              const basename = path.basename(file.url);
+              const typeName = basename.replace('.json', '');
+              const schema = schemaCache.get(typeName);
+              callback(null, schema);
+            }
+          }
+        }
+      });
+      
+      // Replace the raw schema with dereferenced version
+      schemaCache.set(typeName, dereferencedSchema);
+    } catch (err) {
+      console.error(`Error dereferencing schema for ${typeName}:`, err.message);
+    }
+  }
+}
+
+// Load schemas at startup
+loadAllSchemas();
+
+function hasIntrinsicFunction(value, path = []) {
+  if (!value || typeof value !== 'object') return false;
+  
+  // Check for transformed intrinsic functions (our format)
+  const hasTransformed = Object.keys(value).some(key => 
+    key.startsWith('Ref::') || 
+    key === 'Ref::Ref' || 
+    key === 'Ref::GetAtt'
+  );
+  if (hasTransformed) return true;
+
+  // Check for original CloudFormation format
+  const hasOriginal = Object.keys(value).some(key => 
+    key === 'Ref' || 
+    key === 'Fn::GetAtt' || 
+    key.startsWith('Fn::')
+  );
+  if (hasOriginal) return true;
+
+  // Check nested objects
+  if (typeof value === 'object') {
+    return Object.entries(value).some(([key, val]) => 
+      hasIntrinsicFunction(val, [...path, key])
+    );
+  }
+
+  return false;
+}
+
+function validateResource(resourceType, properties, logicalId) {
+  // Skip validation for Custom:: resources
+  if (resourceType.startsWith('Custom::')) {
+    console.warn(`Warning: Skipping validation for custom resource type ${resourceType}`);
+    return true;
+  }
+
+  const schema = schemaCache.get(resourceType);
+  if (!schema) {
+    console.warn(`Warning: No schema found for resource type ${resourceType}`);
+    return true;
+  }
+
+  try {
+    // Get or compile validator for this schema
+    const validatorKey = `validator-${resourceType}`;
+    if (!schemaCache.has(validatorKey)) {
+      const validationSchema = {
+        type: 'object',
+        properties: schema.properties || {},
+        definitions: schema.definitions || {},
+        additionalProperties: false
+      };
+
+      const validator = ajv.compile(validationSchema);
+      schemaCache.set(validatorKey, validator);
+    }
+
+    const validator = schemaCache.get(validatorKey);
+    
+    // Create a copy of properties for validation, removing intrinsic functions
+    const validationProps = {};
+    for (const [key, value] of Object.entries(properties)) {
+      if (!hasIntrinsicFunction(value)) {
+        validationProps[key] = value;
+      }
+    }
+
+    const valid = validator(validationProps);
+
+    if (!valid) {
+      console.log('───────────────────────────────')
+      console.error(`\nValidation errors in \n"${logicalId}" for ${resourceType}:`);
+      validator.errors.forEach(error => {
+        // Get the full property path
+        const propertyPath = error.instancePath.split('/').slice(1);
+        
+        // Check if any part of the path contains an intrinsic function
+        let currentObj = properties;
+        let hasIntrinsic = false;
+        for (const pathPart of propertyPath) {
+          if (!currentObj || typeof currentObj !== 'object') break;
+          if (hasIntrinsicFunction(currentObj[pathPart])) {
+            hasIntrinsic = true;
+            break;
+          }
+          currentObj = currentObj[pathPart];
+        }
+
+        // Only show errors for properties that don't use intrinsic functions
+        if (!hasIntrinsic) {
+          const path = error.instancePath || 'root';
+          if (error.keyword === 'additionalProperties') {
+            console.error(`- ${path}: Invalid property "${error.params.additionalProperty}"`);
+          } else {
+            console.error(`- ${path}: ${error.message}`);
+          }
+          console.error('  Error details:', JSON.stringify(error, null, 2));
+        }
+      });
+    }
+
+    return valid;
+  } catch (err) {
+    console.error(`Error validating ${resourceType} in "${logicalId}":`, err.message);
+    console.error('Stack:', err.stack);
+    return false;
+  }
+}
+
+function validateTemplate(template) {
+  let isValid = true;
+  
+  if (!template.Resources) return isValid;
+
+  for (const [logicalId, resource] of Object.entries(template.Resources)) {
+    if (!resource.Type) {
+      console.error(`Resource ${logicalId} missing Type property`);
+      isValid = false;
+      continue;
+    }
+
+    if (!resource.Properties) {
+      console.warn(`Warning: Resource ${logicalId} has no Properties`);
+      continue;
+    }
+
+    const resourceValid = validateResource(resource.Type, resource.Properties, logicalId);
+    if (!resourceValid) {
+      console.error(`Invalid properties in resource ${logicalId} (${resource.Type})`);
+      isValid = false;
+    }
+  }
+
+  return isValid;
+}
+
+async function cleanCloudFormation(template, options = {}) {
   if (!template) {
     throw new Error('Template is required')
   }
@@ -36,6 +260,12 @@ function cleanCloudFormation(template, options = {}) {
   // Transform and sort
   const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template));
   
+  // Validate the transformed template
+  const isValid = validateTemplate(transformedTemplate);
+  process.exit(1)
+  if (!isValid && options.strict) {
+    throw new Error('Template validation failed');
+  }
 
   // Convert to YAML
   let yamlContent = yaml.dump(transformedTemplate, {
@@ -851,11 +1081,10 @@ function collectNames(template, options = {}) {
   return Array.from(names).sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function test() {
-  // Use the function at the bottom of the file
+async function test() {
   const fileContents = fs.readFileSync('./fixtures/passwordless.json', 'utf8');
-  const template = loadData(fileContents)
-  const cleanedYaml = cleanCloudFormation(template, {
+  const template = loadData(fileContents);
+  const cleanedYaml = await cleanCloudFormation(template, {
     asPrompt: true,
     replaceLogicalIds: [
       {
@@ -903,4 +1132,7 @@ function test() {
   console.log('Transformation complete! Output written to clean-passwordless.yaml');
 }
 
-test()
+test().catch(err => {
+  console.error('Error:', err);
+  process.exit(1);
+});

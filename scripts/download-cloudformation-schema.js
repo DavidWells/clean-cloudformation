@@ -17,7 +17,7 @@ if (fs.existsSync(META_PATH)) {
 
   if (hoursSinceDownload < 24) {
     console.log(`Schema files are up to date (downloaded ${Math.floor(hoursSinceDownload)} hours ago)`);
-    process.exit(0);
+    // process.exit(0);
   }
 }
 
@@ -32,8 +32,13 @@ fs.mkdirSync(EXTRACT_PATH, { recursive: true });
 
 console.log('Downloading CloudFormation schema...');
 
-function updateSchemaContents(content = '') {
-  // return content
+function updateSchemaContents(content = '', filePath = '') {
+  // Special handling for WAFv2 WebACL schema
+  if (filePath.endsWith('AWS::WAFv2::WebACL.json')) {
+    // Return unmodified content for this schema
+    return content;
+  }
+
   const replacements = [
     [/"type"\s*:\s*\[\s*"string"\s*,\s*"object"\s*\]/, '"type": "object"'],
     [/"type"\s*:\s*\[\s*"object"\s*,\s*"string"\s*\]/, '"type": "object"'],
@@ -41,10 +46,14 @@ function updateSchemaContents(content = '') {
     [/"type"\s*:\s*\[\s*"string"\s*,\s*"array"\s*\]/, '"type": "array"'],
     [/"type"\s*:\s*\[\s*"integer"\s*,\s*"string"\s*\]/, '"type": "integer"'],
     [/"type"\s*:\s*\[\s*"number"\s*,\s*"string"\s*\]/, '"type": "number"'],
-    [/"type"\s*:\s*\[\s*"boolean"\s*,\s*"null"\s*\]/, '"type": "boolean"']
+    [/"type"\s*:\s*\[\s*"boolean"\s*,\s*"null"\s*\]/, '"type": "boolean"'],
+    // Fix regex patterns in schemas
+    [/\*\{1,512\}\$"/gm, `{1,512}$"`],
+    [/\+\{1,255\}\$"/gm, `{1,255}$"`],
   ]
   for (const [pattern, replacement] of replacements) {
-    content = content.replace(new RegExp(pattern, 'g'), replacement)
+    const pat = (pattern instanceof RegExp) ? pattern : new RegExp(pattern)
+    content = content.replace(pat, replacement)
   }
   return content
 }
@@ -76,7 +85,7 @@ https.get(SCHEMA_URL, (response) => {
         const filePath = path.join(EXTRACT_PATH, file);
         try {
           let content = fs.readFileSync(filePath, 'utf8');
-          content = updateSchemaContents(content);
+          content = updateSchemaContents(content, filePath);
           const schema = JSON.parse(content);
           
           if (schema.typeName) {

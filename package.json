@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
-    "adm-zip": "^0.5.10"
+    "adm-zip": "^0.5.10",
+    "ajv": "^8.12.0",
+    "@apidevtools/json-schema-ref-parser": "^9.0.9"
   }
 }
