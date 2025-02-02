@@ -1038,23 +1038,90 @@ function handleReplacement(pattern, replacement, logicalId, resource) {
   }
 }
 
-// Add this new function to handle logical ID replacements
-function replaceLogicalIds(template, pattern, replacement) {
-  if (!template.Resources) return
+// Add this helper function before replaceLogicalIds
+function findCommonPostfixes(logicalIds, minLength = 20) {
+  const postfixes = new Map(); // Map to store postfix -> count
+  
+  // Helper to check if string looks random (mix of letters/numbers)
+  function looksRandom(str) {
+    // Should contain:
+    // 1. Both letters and numbers
+    // 2. At least 2 consecutive capital letters
+    return /[A-Za-z]/.test(str) && 
+           /[0-9]/.test(str) &&
+           /[A-Z]{2,}/.test(str);
+  }
 
-  const replacements = {}
-  const existingNames = new Set(Object.keys(template.Resources))
+  // For each logical ID
+  for (const id of logicalIds) {
+    // Look for potential postfixes by checking substrings from the end
+    for (let i = minLength; i <= 40; i++) { // Max 40 chars for postfix
+      if (id.length <= i) continue;
+      
+      const potentialPostfix = id.slice(-i);
+      
+      // Skip if doesn't look random enough
+      if (!looksRandom(potentialPostfix)) continue;
+      
+      // Count this postfix
+      postfixes.set(
+        potentialPostfix, 
+        (postfixes.get(potentialPostfix) || 0) + 1
+      );
+    }
+  }
+
+  // Filter to postfixes that appear multiple times
+  const commonPostfixes = Array.from(postfixes.entries())
+    .filter(([_, count]) => count > 1)
+    // Sort by frequency then length (prefer longer matches with same frequency)
+    .sort(([p1, c1], [p2, c2]) => {
+      if (c1 !== c2) return c2 - c1; // Higher count first
+      return p2.length - p1.length; // Longer postfix first
+    });
+
+  return commonPostfixes;
+}
+
+// Modify replaceLogicalIds to handle postfix removal
+function replaceLogicalIds(template, pattern, replacement) {
+  if (!template.Resources) return;
+
+  const logicalIds = Object.keys(template.Resources);
+  
+  // Find common postfixes before doing other replacements
+  const commonPostfixes = findCommonPostfixes(logicalIds);
+  console.log('commonPostfixes', commonPostfixes)
+  process.exit(1)
+  
+  // If we found common postfixes, add them to our replacement patterns
+  const postfixReplacements = new Map();
+  for (const [postfix, count] of commonPostfixes) {
+    // Only consider postfixes that appear in multiple resources
+    if (count >= 2) {
+      const postfixPattern = new RegExp(`${postfix}$`);
+      postfixReplacements.set(postfixPattern, '');
+    }
+  }
+
+  const replacements = {};
+  const existingNames = new Set(Object.keys(template.Resources));
   const proposedNames = new Map(); // Track all proposed new names
 
   // First pass: identify resources to rename and check for collisions
-  for (const logicalId of Object.keys(template.Resources)) {
-    let newLogicalId
+  for (const logicalId of logicalIds) {
+    let newLogicalId = logicalId;
+
+    // First apply postfix removals
+    for (const [postfixPattern, postfixReplacement] of postfixReplacements) {
+      newLogicalId = newLogicalId.replace(postfixPattern, postfixReplacement);
+    }
+
+    // Then apply the main pattern/replacement
     if (typeof pattern === 'string') {
-      // String replacement
-      newLogicalId = handleReplacement(pattern, replacement, logicalId, template.Resources[logicalId])
+      newLogicalId = handleReplacement(pattern, replacement, newLogicalId, template.Resources[logicalId]);
     } else if (pattern instanceof RegExp) {
-      // Regex replacement
-      newLogicalId = handleReplacement(pattern, replacement, logicalId, template.Resources[logicalId])
+      newLogicalId = handleReplacement(pattern, replacement, newLogicalId, template.Resources[logicalId]);
     }
 
     if (newLogicalId && newLogicalId !== logicalId) {
@@ -1064,15 +1131,15 @@ function replaceLogicalIds(template, pattern, replacement) {
       const wouldCollide = (
         (existingNames.has(newLogicalId) && !proposedNames.has(logicalId)) || 
         Array.from(proposedNames.values()).includes(newLogicalId)
-      )
+      );
 
       if (wouldCollide) {
-        console.warn(`Warning: Skipping rename of '${logicalId}' to '${newLogicalId}' due to potential collision`)
-        continue
+        console.warn(`Warning: Skipping rename of '${logicalId}' to '${newLogicalId}' due to potential collision`);
+        continue;
       }
 
-      proposedNames.set(logicalId, newLogicalId)
-      replacements[logicalId] = newLogicalId
+      proposedNames.set(logicalId, newLogicalId);
+      replacements[logicalId] = newLogicalId;
     }
   }
 
