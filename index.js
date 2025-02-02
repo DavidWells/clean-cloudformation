@@ -336,7 +336,6 @@ async function cleanCloudFormation(template, options = {}) {
   );
 
   yamlContent = insertBlankLines(yamlContent);
-  yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n');
   yamlContent = yamlContent.replace(/(^Resources:\n)\n/, '$1');
   yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]');
   yamlContent = yamlContent.replace(
@@ -345,6 +344,7 @@ async function cleanCloudFormation(template, options = {}) {
   );
   yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3');
   yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!Equals\s+\[.+?\])$/gm, '$1$2: $3');
+  
   yamlContent = yamlContent.replace(
     /^(\s+)AllowedValues:\n(?:\1-\s+(.+?)(?:\n|$))+/gm,
     (match) => {
@@ -361,6 +361,9 @@ async function cleanCloudFormation(template, options = {}) {
       return `${indent}AllowedValues: [${values.join(', ')}]\n`;
     }
   );
+
+
+  yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n');
 
   // Collect names before any transformations
   const names = collectNames(template, {
@@ -953,11 +956,20 @@ function sortResourceKeys(template) {
 
 function insertBlankLines(content) {
   const twoSpaces = '  '
-  return content.replace(
-    // /((?<!^\s*$\n)^\s+[A-Za-z0-9_-]+:\s*\n\s+Type:)/gm,
-    /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:)/gm, // two space
+  
+  // Add blank lines before top-level keys
+  content = content.replace(
+    /^(Description|Metadata|Rules|Mappings|Parameters|Conditions|Resources|Outputs):/gm,
+    '\n$1:'
+  );
+  
+  // Add blank lines before resources (existing functionality)
+  content = content.replace(
+    /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:\s+(?:AWS|Custom|[A-Za-z0-9]+)::[A-Za-z0-9:]+)/gm,
     '\n$1'
-  )
+  );
+
+  return content;
 }
 
 async function loadData(fileContents) {

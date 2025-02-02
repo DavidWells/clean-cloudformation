@@ -1,4 +1,5 @@
 const fs = require('fs').promises;
+const path = require('path');
 const yaml = require('js-yaml');
 const { cleanCloudFormation, loadData } = require('./index');
 
@@ -12,9 +13,9 @@ function outputDirty(fileContents) {
   });
 }
 
-async function example() {
+async function example(filePath) {
   // Read input file
-  const fileContents = await fs.readFile('./fixtures/passwordless.json', 'utf8');
+  let fileContents = await fs.readFile(filePath, 'utf8');
   const template = await loadData(fileContents);
   
   const cleanedYaml = await cleanCloudFormation(template, {
@@ -43,9 +44,10 @@ async function example() {
   })
   
   // Save both versions in parallel
+  const baseName = path.basename(filePath, path.extname(filePath));
   await Promise.all([
-    fs.writeFile('outputs/clean-passwordless.yaml', cleanedYaml),
-    fs.writeFile('outputs/dirty-passwordless.yaml', outputDirty(fileContents))
+    fs.writeFile(`outputs/${baseName}-clean.yaml`, cleanedYaml),
+    fs.writeFile(`outputs/${baseName}-dirty.yaml`, outputDirty(fileContents))
   ]);
 
   // Log the number of lines in the cleaned and dirty files
@@ -59,7 +61,10 @@ async function example() {
   console.log('Transformation complete! Output written to clean-passwordless.yaml');
 }
 
-example().catch(err => {
+example(
+  // './fixtures/passwordless.json',
+  './fixtures/cdn-cloudformation.json'
+).catch(err => {
   console.error('Error:', err);
   process.exit(1);
 }); 
