@@ -62,10 +62,10 @@ async function example(filePath) {
 }
 
 example(
-  // './fixtures/stack-one.json',
+  './fixtures/stack-one.json',
   //'./fixtures/stack-two.json',
-  './fixtures/stack-three.json',
-  //'./fixtures/cdn-cloudformation.json'
+  //'./fixtures/stack-three.json',
+  // './fixtures/cdn-cloudformation.json'
 ).catch(err => {
   console.error('Error:', err)
   process.exit(1)

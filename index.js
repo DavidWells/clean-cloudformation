@@ -1046,32 +1046,32 @@ function findCommonRandomStringsInIds(logicalIds) {
   const postfixes = new Map(); // Map to store postfix -> count
   
   // Look for patterns at the end of logical IDs that:
-  // 1. Standard 8-char pattern (like ADDA7DEB)
-  // 2. Longer hex pattern (like 1cd5ccdaa0c6)
-  // 3. Must contain mix of letters and numbers
+  // 1. 40-char hex pattern (like 663240D697c3cdfc601da74f263d2bb8dcbb4a90)
+  // 2. Standard 8-char pattern (like ADDA7DEB)
+  // 3. Longer hex pattern (like 1cd5ccdaa0c6)
   const patterns = [
-    /[A-Z0-9]{8}/g,  // Standard pattern (ADDA7DEB)
-    /\d[A-Z0-9]{7}/g, // Starts with number (03AA31B2)
+    /[A-Fa-f0-9]{40}$/g,  // 40-char hex deployment id (both upper and lower case)
+    /[A-Z0-9]{8}/g,    // Standard pattern (ADDA7DEB)
+    /\d[A-Z0-9]{7}/g,  // Starts with number (03AA31B2)
     /[A-Z][0-9A-Z]{7}/g, // Starts with letter (E5522E5D)
-    /[a-f0-9]{12}$/g  // 12-char lowercase hex (1cd5ccdaa0c6)
+    /[a-f0-9]{12}$/g   // 12-char lowercase hex (1cd5ccdaa0c6)
   ];
   
   for (const id of logicalIds) {
-    // console.log('id', id)
     // Try each pattern
     for (const pattern of patterns) {
       const matches = Array.from(id.matchAll(pattern));
       for (const match of matches) {
         const postfix = match[0];
-        // For standard patterns, must contain both letters and numbers
+        // For standard 8-char patterns
         if (postfix.length === 8) {
           if (/[A-Z]/.test(postfix) && /[0-9]/.test(postfix)) {
             postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
           }
-        } 
-        // For 12-char hex patterns, must contain both letters and numbers
-        else if (postfix.length === 12) {
-          if (/[a-f]/.test(postfix) && /[0-9]/.test(postfix)) {
+        }
+        // For 40-char or 12-char hex patterns
+        else if (postfix.length === 40 || postfix.length === 12) {
+          if (/[A-Fa-f]/.test(postfix) && /[0-9]/.test(postfix)) {
             postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
           }
         }
@@ -1079,9 +1079,15 @@ function findCommonRandomStringsInIds(logicalIds) {
     }
   }
 
-  // Convert to array of [postfix, count] pairs and sort by frequency
   return Array.from(postfixes.entries())
-    .sort(([_, c1], [__, c2]) => c2 - c1); // Sort by count descending
+    .sort(([p1, c1], [p2, c2]) => {
+      // First sort by length (descending)
+      if (p1.length !== p2.length) {
+        return p2.length - p1.length;
+      }
+      // Then by count (descending)
+      return c2 - c1;
+    });
 }
 
 // Modify replaceLogicalIds to handle postfix removal
@@ -1092,8 +1098,10 @@ function replaceLogicalIds(template, pattern, replacement) {
   
   // Find common postfixes before doing other replacements
   const commonRandomStringsInIds = findCommonRandomStringsInIds(logicalIds);
+  /*
   console.log('commonRandomStringsInIds', commonRandomStringsInIds)
-  process.exit(1)
+  //process.exit(1)
+  /** */
   
   // If we found common postfixes, add them to our replacement patterns
   const postfixReplacements = new Map();
@@ -1115,7 +1123,7 @@ function replaceLogicalIds(template, pattern, replacement) {
 
     // First apply postfix removals
     for (const [postfixPattern, postfixReplacement] of postfixReplacements) {
-      console.log('postfixPattern', postfixPattern)
+      // console.log('postfixPattern', postfixPattern)
       newLogicalId = newLogicalId.replace(postfixPattern, postfixReplacement);
     }
 
