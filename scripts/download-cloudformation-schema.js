@@ -48,8 +48,10 @@ function updateSchemaContents(content = '', filePath = '') {
     [/"type"\s*:\s*\[\s*"number"\s*,\s*"string"\s*\]/, '"type": "number"'],
     [/"type"\s*:\s*\[\s*"boolean"\s*,\s*"null"\s*\]/, '"type": "boolean"'],
     // Fix regex patterns in schemas
-    [/\*\{1,512\}\$"/gm, `{1,512}$"`],
-    [/\+\{1,255\}\$"/gm, `{1,255}$"`],
+    [/\*\{1,512\}\$"/gm,  `{1,512}$"`],
+    [/\{1,512\}\\\\Z"/gm, `{1,512}$"`],
+    [/\\\\Z"\s*\n/gm, `$"\n`],
+    [/\+\{1,255\}\$"/gm,  `{1,255}$"`],
   ]
   for (const [pattern, replacement] of replacements) {
     const pat = (pattern instanceof RegExp) ? pattern : new RegExp(pattern)
