@@ -2,12 +2,13 @@
   "name": "cloudformation-cleaner",
   "version": "1.0.0",
   "description": "Script to clean CloudFormation templates",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
     "download-schemas": "node scripts/download-cloudformation-schema.js",
     "validate-schemas": "node scripts/validate-schema.js"
   },
   "dependencies": {
+    "@davidwells/yaml-utils": "^0.0.2",
     "ajv": "^8.12.0",
     "js-yaml": "^4.1.0"
   },

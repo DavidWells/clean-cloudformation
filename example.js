@@ -1,7 +1,7 @@
 const fs = require('fs').promises
 const path = require('path')
 const yaml = require('js-yaml')
-const { cleanCloudFormation } = require('./index')
+const { cleanCloudFormation } = require('./src')
 
 function outputDirty(fileContents) {
   return yaml.dump(yaml.load(fileContents), {
