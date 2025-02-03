@@ -16,8 +16,10 @@ function outputDirty(fileContents) {
 async function example(filePath) {
   // Read input file
   let fileContents = await fs.readFile(filePath, 'utf8')
-  
-  const cleanedYaml = await cleanCloudFormation(fileContents, {
+  const fileExt = path.basename(filePath).split('.').pop()
+  const fileType = fileExt === 'json' ? 'JSON' : 'YAML'
+
+  const { yaml, json, prompts, resourcesByCount } = await cleanCloudFormation(fileContents, {
     asPrompt: true,
     replaceLogicalIds: [
       {
@@ -45,24 +47,42 @@ async function example(filePath) {
   // Save both versions in parallel
   const baseName = path.basename(filePath, path.extname(filePath))
   await Promise.all([
-    fs.writeFile(`outputs/${baseName}-clean.yml`, cleanedYaml),
+    fs.writeFile(`outputs/${baseName}-clean.yml`, yaml),
     fs.writeFile(`outputs/${baseName}-dirty.yml`, outputDirty(fileContents))
   ])
 
+  console.log('───────────────────────────────────────────────────')
   // Log the number of lines in the cleaned and dirty files
-  const cleanLines = cleanedYaml.split('\n').length
+  const cleanLines = yaml.split('\n').length
   const dirtyLines = outputDirty(fileContents).split('\n').length
-  console.log(`Clean lines: ${cleanLines}`)
-  console.log(`Dirty lines: ${dirtyLines}`)
+  console.log(`Line savings: ${((dirtyLines - cleanLines) / dirtyLines * 100).toFixed(2)}% reduction. Removed ${dirtyLines - cleanLines} lines.`)
+  console.log(`   Output has   ${cleanLines} lines`)
+  console.log(`   Original has ${dirtyLines} lines`)
+  console.log('───────────────────────────────────────────────────')
+
+  // Get file sizes
+  const cleanSize = Buffer.from(yaml).length
+  const dirtySize = Buffer.from(outputDirty(fileContents)).length
+  const minifiedJson = JSON.stringify(json)
+  const minifiedJsonSize = Buffer.from(minifiedJson).length
+  const sizeSavings = ((dirtySize - minifiedJsonSize) / dirtySize) * 100
+
+  console.log(`File size savings: ${sizeSavings.toFixed(2)}% reduction. Removed ${dirtySize - minifiedJsonSize} bytes.`)
+  console.log(`Input  ${fileType}:   ${(dirtySize / 1024).toFixed(2)} KB`)
+  console.log(`Output YAML:   ${(cleanSize / 1024).toFixed(2)} KB`)
+  console.log(`Output JSON:   ${(minifiedJsonSize / 1024).toFixed(2)} KB`)
+  console.log('───────────────────────────────────────────────────')
+
   // Log savings
-  const savings = ((dirtyLines - cleanLines) / dirtyLines) * 100
-  console.log(`Savings: ${savings.toFixed(2)}%`)
   console.log(`Transformation complete! Output written to ${baseName}-clean.yml`)
+  // console.log(prompts.resourceCosts)
+  // console.log(prompts.resourceNames)
+  console.log(resourcesByCount)
 }
 
 example(
-  // './fixtures/stack-one.json',
-  './fixtures/stack-two.json',
+  './fixtures/stack-one.json',
+  // './fixtures/stack-two.json',
   //'./fixtures/stack-three.json',
   // './fixtures/stack-four.json',
   // './fixtures/cdn-cloudformation.json'
