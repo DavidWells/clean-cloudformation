@@ -5,7 +5,7 @@ const { formatTemplate } = require('./utils/formatters')
 const { formatYaml } = require('./utils/formatters-yaml')
 const { collectNames } = require('./utils/collect-name-props')
 const { getResourceCounts } = require('./utils/resource-count')
-
+const { addSectionHeaders } = require('./utils/yaml-headers')
 
 async function cleanCloudFormation(input, options = {}) {
   // Load and parse the template
@@ -73,6 +73,7 @@ async function cleanCloudFormation(input, options = {}) {
   }
 
   yamlContent = formatYaml(yamlContent)
+  yamlContent = addSectionHeaders(yamlContent)
 
   // Collect names before any transformations
   const { foundPropNames, prompt } = await collectNames(template, {
