@@ -48,7 +48,7 @@ async function example(filePath) {
   const baseName = path.basename(filePath, path.extname(filePath))
   await Promise.all([
     fs.writeFile(`outputs/${baseName}-clean.yml`, yaml),
-    fs.writeFile(`outputs/${baseName}-clean-two.yml`, yamlTwo),
+    fs.writeFile(`outputs/${baseName}-clean-comments.yml`, yamlTwo),
     fs.writeFile(`outputs/${baseName}-dirty.yml`, outputDirty(fileContents))
   ])
 

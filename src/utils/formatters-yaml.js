@@ -1,10 +1,10 @@
 
 
 function formatYaml(yamlContent = '') {
-    // Fix array indentation
+  /* Fix array indentation */
   yamlContent = yamlContent.replace(/^(\s+)[^-\s].*:\n\1-\s/gm, '$1$&  ')
 
-  // Apply YAML formatting
+  /* Apply YAML formatting */
   yamlContent = yamlContent.replace(/Ref::/g, '!')
   yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
   
@@ -62,6 +62,14 @@ function formatYaml(yamlContent = '') {
   return yamlContent
 }
 
+function parseResourcePattern(indentSpaces = 2) {
+  // https://regex101.com/r/9bGvxB/4
+  return new RegExp(
+    `^(([ \t]+#.*\\n)*)(${' '.repeat(indentSpaces)}[A-Za-z0-9_-]+:)\\s*\\n(${' '.repeat(indentSpaces * 2)}Type:\\s+(?:AWS|Custom|[A-Za-z0-9]+)::[A-Za-z0-9:]+)`,
+    'gm'
+  )
+}
+
 function insertBlankLines(content) {
   const twoSpaces = '  '
   
@@ -71,11 +79,14 @@ function insertBlankLines(content) {
     '\n$1:'
   )
   
-  // Add blank lines before resources (existing functionality)
-  content = content.replace(
-    /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:\s+(?:AWS|Custom|[A-Za-z0-9]+)::[A-Za-z0-9:]+)/gm,
-    '\n$1'
-  )
+  // /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:\s+(?:AWS|Custom|[A-Za-z0-9]+)::[A-Za-z0-9:]+)/gm
+  /* Add blank lines before resources (existing functionality) */
+  // content = content.replace(
+  //   /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:\s+(?:AWS|Custom|[A-Za-z0-9]+)::[A-Za-z0-9:]+)/gm,
+  //   '\n$1'
+  // )
+  const resourcePattern = parseResourcePattern(2)
+  content = content.replace(resourcePattern, '\n$1$3')
 
   return content
 }

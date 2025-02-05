@@ -2406,6 +2406,7 @@ Resources:
       'aws:cdk:path': >-
         AWSAccelerator-InstallerStack/UpdatePipelineGithubTokenRule/AllowEventRuleAWSAcceleratorInstallerStackUpdatePipelineGithubTokenFunction2367C02A
     Condition: UseGitHubCondition
+  # multiple comments
   # Comment here
   UpdatePipelineGithubTokenFunctionLogGroupFCE3723A:
     Type: 'AWS::Logs::LogGroup'
