@@ -8,7 +8,7 @@
     "validate-schemas": "node scripts/validate-schema.js"
   },
   "dependencies": {
-    "@davidwells/yaml-utils": "^0.0.2",
+    "@davidwells/yaml-utils": "^0.0.5",
     "ajv": "^8.12.0",
     "js-yaml": "^4.1.0"
   },

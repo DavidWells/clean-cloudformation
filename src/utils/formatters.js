@@ -16,15 +16,24 @@ function formatTemplate(template) {
   cleanMetadata(template)
   removeCdkMetadata(template)
   removeMetadataCondition(template)
-  cleanConditionNames(template)
-  /* Remove Hex postfix from resource names */
-  cleanResourceNames(template)
+  /* Remove Hex postfix from conditions and resource names */
+  //*
+  const conditionMatches = cleanConditionNames(template) || []
+  const resourceMatches = cleanResourceNames(template) || []
+  /** */
+  // console.log('conditionMatches', conditionMatches)
+  // console.log('resourceMatches', resourceMatches)
+  // process.exit(1)
+
   /* Remove CDK tags from resources */
   removeCdkTags(template)
   transformParameterArrays(template)
   sortResourceKeys(template)
 
-  return template
+  return {
+    template,
+    randomStrings: [...conditionMatches, ...resourceMatches]
+  }
 }
 
 // Add this new function at the start
@@ -142,11 +151,13 @@ function cleanConditionNames(template) {
   // - 8 character hex code at the end
   const postfixPattern = /^([A-Za-z0-9]+?)([0-9A-F]{8})$/
   const conditionRenames = {}
+  const allMatches = []
 
   // First pass: identify conditions that can be renamed
   for (const conditionName of Object.keys(template.Conditions)) {
     const match = conditionName.match(postfixPattern)
     if (match) {
+      console.log('cleanConditionNames match', match)
       const baseName = match[1]
       // Check if base name already exists
       const baseNameExists = Object.keys(template.Conditions).some(
@@ -157,6 +168,7 @@ function cleanConditionNames(template) {
 
       if (!baseNameExists) {
         conditionRenames[conditionName] = baseName
+        allMatches.push(match[2])
       }
     }
   }
@@ -191,6 +203,8 @@ function cleanConditionNames(template) {
   // Update all condition references in the template
   updateConditionRefs(template.Resources)
   updateConditionRefs(template.Outputs)
+
+  return allMatches
 }
 
 // Add this new function after cleanConditionNames
@@ -200,11 +214,12 @@ function cleanResourceNames(template) {
 
   const postfixPattern = /^([A-Za-z0-9]+?)([0-9A-F]{8})$/
   const resourceRenames = {}
-
+  const allMatches = []
   // First pass: identify resources that can be renamed
   for (const resourceName of Object.keys(template.Resources)) {
     const match = resourceName.match(postfixPattern)
     if (match) {
+      console.log('cleanResourceNames match', match)
       const baseName = match[1]
       // Check if base name already exists
       const baseNameExists = Object.keys(template.Resources).some(
@@ -215,6 +230,7 @@ function cleanResourceNames(template) {
 
       if (!baseNameExists) {
         resourceRenames[resourceName] = baseName
+        allMatches.push(match[2])
       }
     }
   }
@@ -272,6 +288,7 @@ function cleanResourceNames(template) {
   if (template.Conditions) {
     updateResourceRefs(template.Conditions)
   }
+  return allMatches
 }
 
 

@@ -19,7 +19,7 @@ async function example(filePath) {
   const fileExt = path.basename(filePath).split('.').pop()
   const fileType = fileExt === 'json' ? 'JSON' : 'YAML'
 
-  const { yaml, json, prompts, resourcesByCount } = await cleanCloudFormation(fileContents, {
+  const { yaml, yamlTwo, json, prompts, resourcesByCount, comments } = await cleanCloudFormation(fileContents, {
     asPrompt: true,
     replaceLogicalIds: [
       {
@@ -48,6 +48,7 @@ async function example(filePath) {
   const baseName = path.basename(filePath, path.extname(filePath))
   await Promise.all([
     fs.writeFile(`outputs/${baseName}-clean.yml`, yaml),
+    fs.writeFile(`outputs/${baseName}-clean-two.yml`, yamlTwo),
     fs.writeFile(`outputs/${baseName}-dirty.yml`, outputDirty(fileContents))
   ])
 
@@ -78,11 +79,15 @@ async function example(filePath) {
   // console.log(prompts.resourceCosts)
   // console.log(prompts.resourceNames)
   console.log(resourcesByCount)
+
+  console.log(comments)
 }
 
 example(
   // './fixtures/stack-one.json',
-  './fixtures/stack-two.json',
+  // './fixtures/stack-two.json',
+  './fixtures/stack-two.yml',
+  // './fixtures/tiny.yml',
   //'./fixtures/stack-three.json',
   // './fixtures/stack-four.json',
   // './fixtures/cdn-cloudformation.json'

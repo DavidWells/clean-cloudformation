@@ -1,3 +1,5 @@
+const path = require('path')
+const fs = require('fs').promises
 const yaml = require('js-yaml')
 const { loadSchema, loadAllSchemas } = require('./utils/schemas')
 const { validateTemplate } = require('./utils/validators')
@@ -6,31 +8,41 @@ const { formatYaml } = require('./utils/formatters-yaml')
 const { collectNames } = require('./utils/collect-name-props')
 const { getResourceCounts } = require('./utils/resource-count')
 const { addSectionHeaders } = require('./utils/yaml-headers')
+const { stringify, extractYamlComments } = require('@davidwells/yaml-utils')
 
-async function cleanCloudFormation(input, options = {}) {
-  // Load and parse the template
-  let template
-  if (typeof input === 'string') {
-    // Parse the template - try JSON first, then YAML if that fails
-    try {
-      template = JSON.parse(input)
-    } catch (e) {
-      console.log('error', e)
-      template = yaml.load(input)
-    }
-  } else {
-    template = input
+
+async function cleanCloudFormation(input, opts = {}) {
+  const _options = opts || {}
+  const defaultOptions = {
+    cleanCode: true
   }
+  const options = { 
+    ...defaultOptions, 
+    ..._options 
+  }
+
+  if (!input) {
+    throw new Error('Input is required')
+  }
+
+  input = await resolveInput(input)
+
+  // Load and parse the template
+  const template = parseInput(input, options)
 
   if (!template) {
     throw new Error('Template is required')
   }
 
+  // console.log('template', template)
+  // process.exit(1)
+
   // Get resource counts and prompts
   const { resourcesByCount, resourcesPrompt } = getResourceCounts(template);
 
   /* Process the template object */
-  formatTemplate(template)
+  const { randomStrings } = formatTemplate(template)
+  // console.log('randomStrings', randomStrings)
 
   /* Handle logical ID replacements if specified */
   if (options.replaceLogicalIds) {
@@ -48,6 +60,16 @@ async function cleanCloudFormation(input, options = {}) {
   if (!isValid && options.strict) {
     throw new Error('Template validation failed')
   }
+
+  const commentsData = extractYamlComments(input)
+  commentsData.comments = cleanKeys(commentsData.comments, randomStrings)
+  // process.exit(1)
+
+  let yamlContentTwo = stringify(transformedTemplate, {
+    originalString: input,
+    commentData: commentsData,
+    lineWidth: -1
+  })
 
   // Convert to YAML
   let yamlContent
@@ -75,6 +97,10 @@ async function cleanCloudFormation(input, options = {}) {
   yamlContent = formatYaml(yamlContent)
   yamlContent = addSectionHeaders(yamlContent)
 
+  yamlContentTwo = formatYaml(yamlContentTwo)
+  yamlContentTwo = addSectionHeaders(yamlContentTwo)
+
+
   // Collect names before any transformations
   const { foundPropNames, prompt } = await collectNames(template, {
     // returnAll: true
@@ -82,6 +108,8 @@ async function cleanCloudFormation(input, options = {}) {
 
   return {
     yaml: yamlContent,
+    comments: commentsData,
+    yamlTwo: yamlContentTwo,
     json: transformedTemplate,
     resourcesByCount,
     resourcesNamePropertiesFound: foundPropNames,
@@ -90,6 +118,13 @@ async function cleanCloudFormation(input, options = {}) {
       resourceNames: prompt
     }
   }
+}
+
+function cleanKeys(arr, randomStrings) {
+  return arr.map(item => ({
+    ...item,
+    key: randomStrings.reduce((key, suffix) => key.replace(suffix, ''), item.key)
+  }))
 }
 
 // Add this new function after removeBootstrapVersionParameter
@@ -229,9 +264,53 @@ function transformIntrinsicFunctions(obj) {
 
 
 
+async function resolveInput(input) {
+  if (typeof input === 'string' && (input.endsWith('.yml') || input.endsWith('.yaml') || input.endsWith('.json'))) {
+    return fs.readFile(input, 'utf8')
+  }
+  return input
+}
 
+function parseInput(input, options = {}) {
+  if (typeof input === 'object') {
+    return input
+  }
 
+  if (typeof input !== 'string') {
+    throw new Error('Input must be an object or a string')
+  }
 
+  let template
+  // Parse the template - try JSON first, then YAML if that fails
+  try {
+    template = JSON.parse(input)
+  } catch (e) {
+    let cleanYml = input
+    if (options.cleanCode) {
+      // Replace ZipFile: |2- pattern with ZipFile: |
+      cleanYml = input.replace(/^([ \t]*[A-Za-z0-9_-]+:) \|2\-$/gm, '$1 |-\n')
+    }
+    // console.log('cleanYml', cleanYml)
+    // process.exit(1)
+
+    // console.log('cleanYml', cleanYml)
+    // process.exit(1)
+    // console.log('error', e)
+    try {
+      template = yaml.load(cleanYml)
+    } catch (e) {
+      console.log('Loading YAML template failed', e)
+      // Fallback to original input
+      try {
+        template = yaml.load(input)
+      } catch (e) {
+        console.log('Loading YAML template failed', e)
+        process.exit(1)
+      }
+    }
+  }
+  return template
+}
 
 
 function splitResourceType(resourceType) {
@@ -318,7 +397,7 @@ function replaceLogicalIds(template, pattern, replacement) {
   
   // Find common postfixes before doing other replacements
   const commonRandomStringsInIds = findCommonRandomStringsInIds(logicalIds);
-  /*
+  //*
   console.log('commonRandomStringsInIds', commonRandomStringsInIds)
   //process.exit(1)
   /** */

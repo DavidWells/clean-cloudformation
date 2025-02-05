@@ -12,7 +12,7 @@ async function loadSchema(resourceType) {
   }
 
   const [vendor, service, type] = resourceType.split('::')
-  const schemaPath = path.join(__dirname, '..', 'schemas', `${vendor}::${service}::${type}.json`)
+  const schemaPath = path.join(__dirname, '../..', 'schemas', `${vendor}::${service}::${type}.json`)
 
   try {
     const schemaContent = await fs.readFile(schemaPath, 'utf8')
