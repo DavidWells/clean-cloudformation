@@ -1,3 +1,10 @@
+
+/**
+ * Formats YAML content into cleaner CloudFormation YAML
+ *
+ * @param {string} [yamlContent='']
+ * @return {string}
+ */
 function formatYaml(yamlContent = '') {
   /* Fix array indentation */
   yamlContent = yamlContent.replace(/^(\s+)[^-\s].*:\n\1-\s/gm, '$1$&  ')
@@ -6,13 +13,11 @@ function formatYaml(yamlContent = '') {
   yamlContent = yamlContent.replace(/Ref::/g, '!')
   yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
 
-
   /* Quote date-like values. E.g. Version: 2012-10-17 */
   yamlContent = yamlContent.replace(
     /^(\s*[A-Za-z]+):\s+(\d{4}-\d{2}-\d{2})$/gm,
     '$1: "$2"'
   )
-
 
   /* Fold DependsOn arrays if 2 or less into a single line */
   yamlContent = yamlContent.replace(
@@ -34,13 +39,19 @@ function formatYaml(yamlContent = '') {
     }
   )
 
+  /* Insert blank lines above top-level keys */
   yamlContent = insertBlankLines(yamlContent)
   yamlContent = yamlContent.replace(/(^Resources:\n)\n/, '$1')
+
+  /* Fold Equals arrays into a single line */
   yamlContent = yamlContent.replace(/^(\s+)!(Equals)\n\1-\s+(.+?)\n\1-\s+(.+?)$/gm, '$1!$2 [ $3, $4 ]')
+
+  /* Fold Equals arrays into a single line */
   yamlContent = yamlContent.replace(
     /^(\s+)-\s+!Equals\n\1\s+-\s+(.+?)\n\1\s+-\s+(.+?)$/gm,
     '$1- !Equals [ $2, $3 ]'
   )
+  /* Fix Sub and Ref */
   yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!(?:Sub|Ref|GetAtt)\s.+)$/gm, '$1$2: $3')
   yamlContent = yamlContent.replace(/^(\s+)(.+?):\n\1\s+(!Equals\s+\[.+?\])$/gm, '$1$2: $3')
   
@@ -63,6 +74,9 @@ function formatYaml(yamlContent = '') {
     }
   )
 
+  /* Replace extra blank lines between Resources and first def: */
+  yamlContent = yamlContent.replace(/^([ \t]{2})?(Resources:)\n\s*\n/gm, '$1$2\n')
+
   yamlContent = yamlContent.replace(/\n\n\n+/g, '\n\n')
 
   return yamlContent
@@ -79,9 +93,9 @@ function parseResourcePattern(indentSpaces = 2) {
 function insertBlankLines(content) {
   const twoSpaces = '  '
   
-  // Add blank lines before top-level keys
+  // Add blank lines before top-level keys if they don't have comments/spaces above
   content = content.replace(
-    /^(Description|Metadata|Rules|Mappings|Parameters|Conditions|Resources|Outputs):/gm,
+    /(?<!^\s*$)(?<!#.*\n)(?<!^\s*#.*\n)(?:^|^  )(Description|Metadata|Rules|Mappings|Parameters|Conditions|Resources|Outputs):/gm,
     '\n$1:'
   )
   

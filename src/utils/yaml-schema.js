@@ -43,8 +43,27 @@ function getCfnSchema() {
     new yaml.Type('!Condition', { kind: 'scalar' })
   ]
 
-  // Create custom schema with CloudFormation tags
-  return yaml.DEFAULT_SCHEMA.extend(cfnTags)
+  // Create a custom type for IAM Policy Version
+  // const policyVersionType = new yaml.Type('tag:yaml.org,2002:str', {
+  //   kind: 'scalar',
+  //   resolve: function(data) {
+  //     console.log('data', data)
+  //     // Check if this looks like a policy version
+  //     if (typeof data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data)) {
+  //       return true
+  //     }
+  //     return false
+  //   },
+  //   construct: function(data) {
+  //     return data
+  //   }
+  // })
+
+  // Create custom schema with CloudFormation tags and policy version handling
+  return yaml.DEFAULT_SCHEMA.extend([
+    ...cfnTags, 
+    // policyVersionType
+  ])
 }
 
 function dumpYaml(template) {

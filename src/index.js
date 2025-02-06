@@ -120,20 +120,7 @@ async function cleanCloudFormation(input, opts = {}) {
   // Convert to YAML
   let yamlContent
   try {
-    yamlContent = yaml.dump(transformedTemplate, {
-      indent: 2,
-      lineWidth: -1,
-      noRefs: true,
-      noArrayIndent: false,
-      flowStyle: false,
-      styles: {
-        '!!null': 'empty',
-        '!!str': 'plain'
-      },
-      quotingType: '"',  // Use double quotes instead of single quotes
-      forceQuotes: false, // Only quote when necessary
-      schema: getCfnSchema() // Add schema here
-    })
+    yamlContent = dumpYaml(transformedTemplate)
     /*
     console.log('yamlContent', yamlContent)
     process.exit(1)
@@ -155,11 +142,15 @@ async function cleanCloudFormation(input, opts = {}) {
     // returnAll: true
   })
 
+  // differ here
+  
+
+
 
   return {
-    yaml: yamlContent,
+    yaml: yamlContent.trim(),
     comments: commentsData,
-    yamlTwo: yamlContentTwo,
+    yamlTwo: yamlContentTwo.trim(),
     json: transformedTemplate,
     resourcesByCount,
     resourcesNamePropertiesFound: foundPropNames,
@@ -181,9 +172,9 @@ function cleanKeys(arr, randomStrings) {
 // Add this new function after removeBootstrapVersionParameter
 function sortTopLevelKeys(template) {
   const order = [
+    'Description',
     'AWSTemplateFormatVersion',
     'Transform',
-    'Description',
     'Metadata',
     'Rules',
     'Mappings',
@@ -401,7 +392,6 @@ function parseInput(input, options = {}) {
   let template
   let parseErrors = []
   
-  // Parse the template - try JSON first, then YAML if that fails
   try {
     template = JSON.parse(input)
   } catch (e) {
@@ -411,14 +401,15 @@ function parseInput(input, options = {}) {
       cleanYml = input.replace(/^([ \t]*[A-Za-z0-9_-]+:) \|2\-$/gm, '$1 |-\n')
     }
 
+    // Quote policy version to prevent date parsing
+    cleanYml = cleanYml.replace(
+      /^(\s*Version:\s*)(\d{4}-\d{2}-\d{2})$/gm,
+      '$1"$2"'
+    )
+
     const cfnSchema = getCfnSchema()
-    console.log('cfnSchema', cfnSchema)
-
-
     try {
       template = yaml.load(cleanYml, { schema: cfnSchema })
-      console.log('template', template.Resources.RedirectBucketPolicy)
-      process.exit(1)
     } catch (e) {
       parseErrors.push(e)
       try {
