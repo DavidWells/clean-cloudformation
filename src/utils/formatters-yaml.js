@@ -1,5 +1,3 @@
-
-
 function formatYaml(yamlContent = '') {
   /* Fix array indentation */
   yamlContent = yamlContent.replace(/^(\s+)[^-\s].*:\n\1-\s/gm, '$1$&  ')
@@ -8,6 +6,12 @@ function formatYaml(yamlContent = '') {
   yamlContent = yamlContent.replace(/Ref::/g, '!')
   yamlContent = yamlContent.replace(/!(Ref|GetAtt|Join|Sub|Select|Split|FindInMap|If|Not|Equals|And|Or):/g, '!$1')
   
+  /* Quote date-like values. E.g. Version: 2012-10-17 */
+  yamlContent = yamlContent.replace(
+    /^(\s*[A-Za-z]+):\s+(\d{4}-\d{2}-\d{2})$/gm,
+    '$1: "$2"'
+  )
+
   /* Fold DependsOn arrays if 2 or less into a single line */
   yamlContent = yamlContent.replace(
     /^(\s+)DependsOn:\n(?:\1[\s-]+.+?\n)+/gm,
@@ -86,7 +90,7 @@ function insertBlankLines(content) {
   //   '\n$1'
   // )
   const resourcePattern = parseResourcePattern(2)
-  content = content.replace(resourcePattern, '\n$1$3')
+  content = content.replace(resourcePattern, '\n$1$3\n$4')
 
   return content
 }

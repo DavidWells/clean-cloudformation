@@ -1,5 +1,16 @@
 // Functions for formatting and cleaning CloudFormation templates
 
+const util = require('util')
+
+function deepLog(objOrLabel, logVal) {
+  let obj = objOrLabel
+  if (typeof objOrLabel === 'string') {
+    obj = logVal
+    console.log(objOrLabel)
+  }
+  console.log(util.inspect(obj, false, null, true))
+}
+
 function formatTemplate(template) {
   if (!template) {
     throw new Error('Template is required')
@@ -29,6 +40,9 @@ function formatTemplate(template) {
   removeCdkTags(template)
   transformParameterArrays(template)
   sortResourceKeys(template)
+
+  // deepLog('template', template)
+  // process.exit(1)
 
   return {
     template,

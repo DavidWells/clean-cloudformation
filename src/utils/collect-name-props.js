@@ -1,5 +1,6 @@
 const { loadSchema } = require('./schemas')
 const { validateNamePattern } = require('./validators')
+const { resolveResources, getResourcesEntries } = require('./resolve-resources')
 
 const ignoreNames = [
   'AttributeName',
@@ -72,8 +73,9 @@ async function collectNames(template, options = {}) {
       }
     }
   }
-
-  findNames(template.Resources, ['Resources'])
+  const { Resources } = resolveResources(template)
+  console.log('resources', Resources)
+  findNames(Resources, ['Resources'])
 
   const foundNames = Array.from(names)
 

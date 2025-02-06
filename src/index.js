@@ -9,8 +9,11 @@ const { collectNames } = require('./utils/collect-name-props')
 const { getResourceCounts } = require('./utils/resource-count')
 const { addSectionHeaders } = require('./utils/yaml-headers')
 const { stringify, extractYamlComments } = require('@davidwells/yaml-utils')
-
-
+const { resolveResources, getLogicalIds } = require('./utils/resolve-resources')
+const https = require('https')
+const http = require('http')
+const { getCfnSchema } = require('./utils/yaml-schema')
+const { deepLog } = require('./utils/logger')
 async function cleanCloudFormation(input, opts = {}) {
   const _options = opts || {}
   const defaultOptions = {
@@ -34,8 +37,8 @@ async function cleanCloudFormation(input, opts = {}) {
     throw new Error('Template is required')
   }
 
-  // console.log('template', template)
-  // process.exit(1)
+  deepLog('template', template)
+  process.exit(1)
 
   // Get resource counts and prompts
   const { resourcesByCount, resourcesPrompt } = getResourceCounts(template);
@@ -44,18 +47,48 @@ async function cleanCloudFormation(input, opts = {}) {
   const { randomStrings } = formatTemplate(template)
   // console.log('randomStrings', randomStrings)
 
-  /* Handle logical ID replacements if specified */
-  if (options.replaceLogicalIds) {
-    for (const { pattern, replacement } of options.replaceLogicalIds) {
-      replaceLogicalIds(template, pattern, replacement)
+  // First handle random string replacements
+  const { Resources, via } = resolveResources(template)
+  console.log('BeforeResources', getLogicalIds(template))
+  // process.exit(1)
+  if (template.Resources) {
+    const logicalIds = getLogicalIds(template)
+    const commonRandomStringsInIds = findCommonRandomStringsInIds(logicalIds);
+    
+    // Create replacement patterns for random strings
+    const postfixReplacements = new Map();
+    for (const [postfix, count] of commonRandomStringsInIds) {
+      if (count >= 1) {
+        const postfixPattern = new RegExp(`${postfix}`);
+        postfixReplacements.set(postfixPattern, '');
+      }
+    }
+
+    // Apply random string replacements first
+    if (postfixReplacements.size > 0) {
+      replaceLogicalIds(template, { postfixReplacements });
     }
   }
+  console.log('After random string replacements', getLogicalIds(template))
+  // process.exit(1)
+
+  /* Then handle user-specified logical ID replacements if specified */
+  if (options.replaceLogicalIds) {
+    for (const { pattern, replacement } of options.replaceLogicalIds) {
+      console.log('pattern', pattern)
+      console.log('replacement', replacement)
+      replaceLogicalIds(template, { pattern, replacement });
+    }
+  }
+  // console.log('After user-specified logical ID replacements', Object.keys(template.Resources))
+  // process.exit(1)
 
   // Transform and sort
   const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template))
   
   // Validate the transformed template
   const isValid = await validateTemplate(transformedTemplate)
+  console.log('isValid', isValid)
 
   if (!isValid && options.strict) {
     throw new Error('Template validation failed')
@@ -69,7 +102,10 @@ async function cleanCloudFormation(input, opts = {}) {
     originalString: input,
     commentData: commentsData,
     lineWidth: -1
-  })
+  }).trim()
+
+  console.log('yamlContentTwo', yamlContentTwo)
+  process.exit(1)
 
   // Convert to YAML
   let yamlContent
@@ -85,10 +121,11 @@ async function cleanCloudFormation(input, opts = {}) {
         '!!str': 'plain'
       },
       quotingType: '"',  // Use double quotes instead of single quotes
-      forceQuotes: false // Only quote when necessary
+      forceQuotes: false, // Only quote when necessary
+      schema: getCfnSchema() // Add schema here
     })
-    // console.log('yamlContent', yamlContent)
-    // process.exit(1)
+    console.log('yamlContent', yamlContent)
+    process.exit(1)
   } catch(e) {
     // console.log('error', e)
     // process.exit(1)
@@ -106,6 +143,7 @@ async function cleanCloudFormation(input, opts = {}) {
     // returnAll: true
   })
 
+
   return {
     yaml: yamlContent,
     comments: commentsData,
@@ -116,7 +154,8 @@ async function cleanCloudFormation(input, opts = {}) {
     prompts: {
       resourceCosts: resourcesPrompt,
       resourceNames: prompt
-    }
+    },
+    originalContents: input
   }
 }
 
@@ -262,12 +301,40 @@ function transformIntrinsicFunctions(obj) {
   return obj
 }
 
-
-
 async function resolveInput(input) {
+  // Check if input is a URL
+  try {
+    const url = new URL(input)
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return new Promise((resolve, reject) => {
+        const client = url.protocol === 'https:' ? https : http
+        
+        client.get(url, (res) => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Failed to fetch URL: ${input} (${res.statusCode} ${res.statusMessage})`))
+            return
+          }
+
+          let data = ''
+          res.on('data', chunk => data += chunk)
+          res.on('end', () => resolve(data))
+        }).on('error', err => {
+          reject(new Error(`Failed to fetch URL: ${input} (${err.message})`))
+        })
+      })
+    }
+  } catch (err) {
+    // Not a valid URL, continue with file handling
+    if (err.code !== 'ERR_INVALID_URL') {
+      throw err
+    }
+  }
+
+  // Handle local files
   if (typeof input === 'string' && (input.endsWith('.yml') || input.endsWith('.yaml') || input.endsWith('.json'))) {
     return fs.readFile(input, 'utf8')
   }
+
   return input
 }
 
@@ -281,30 +348,29 @@ function parseInput(input, options = {}) {
   }
 
   let template
+  let parseErrors = []
+  
   // Parse the template - try JSON first, then YAML if that fails
   try {
     template = JSON.parse(input)
   } catch (e) {
+    parseErrors.push(e)
     let cleanYml = input
     if (options.cleanCode) {
-      // Replace ZipFile: |2- pattern with ZipFile: |
       cleanYml = input.replace(/^([ \t]*[A-Za-z0-9_-]+:) \|2\-$/gm, '$1 |-\n')
     }
-    // console.log('cleanYml', cleanYml)
-    // process.exit(1)
 
-    // console.log('cleanYml', cleanYml)
-    // process.exit(1)
-    // console.log('error', e)
+    const cfnSchema = getCfnSchema()
+    console.log('cfnSchema', cfnSchema)
     try {
-      template = yaml.load(cleanYml)
+      template = yaml.load(cleanYml, { schema: cfnSchema })
     } catch (e) {
-      console.log('Loading YAML template failed', e)
-      // Fallback to original input
+      parseErrors.push(e)
       try {
-        template = yaml.load(input)
+        template = yaml.load(input, { schema: cfnSchema })
       } catch (e) {
-        console.log('Loading YAML template failed', e)
+        parseErrors.push(e)
+        console.log('parseErrors', parseErrors)
         process.exit(1)
       }
     }
@@ -314,12 +380,14 @@ function parseInput(input, options = {}) {
 
 
 function splitResourceType(resourceType) {
+  console.log('resourceType', resourceType)
   const [vendor, service, type] = resourceType.split('::')
   return {
     vendor,
     service,
     type,
-    name: service + type
+    name: service + type,
+    resourceType
   }
 }
 
@@ -331,6 +399,7 @@ function handleReplacement(pattern, replacement, logicalId, resource) {
     return logicalId.replace(pattern, replacement)
   } else if (typeof replacement === 'function') {
     const resourceDetails = splitResourceType(resource.Type)
+    console.log('resourceDetails', resourceDetails)
     const payload = {
       logicalId,
       resourceDetails,
@@ -389,54 +458,39 @@ function findCommonRandomStringsInIds(logicalIds) {
     });
 }
 
-// Modify replaceLogicalIds to handle postfix removal
-function replaceLogicalIds(template, pattern, replacement) {
+// Update replaceLogicalIds to handle both cases
+function replaceLogicalIds(template, options) {
   if (!template.Resources) return;
 
-  const logicalIds = Object.keys(template.Resources);
-  
-  // Find common postfixes before doing other replacements
-  const commonRandomStringsInIds = findCommonRandomStringsInIds(logicalIds);
-  //*
-  console.log('commonRandomStringsInIds', commonRandomStringsInIds)
-  //process.exit(1)
-  /** */
-  
-  // If we found common postfixes, add them to our replacement patterns
-  const postfixReplacements = new Map();
-  for (const [postfix, count] of commonRandomStringsInIds) {
-    // Only consider postfixes that appear in multiple resources
-    if (count >= 1) {
-      const postfixPattern = new RegExp(`${postfix}`);
-      postfixReplacements.set(postfixPattern, '');
-    }
-  }
-
+  const { postfixReplacements, pattern, replacement } = options;
+  const logicalIds = getLogicalIds(template);
+  console.log('logicalIds', logicalIds)
+  // console.log('postfixReplacements', postfixReplacements)
+  // process.exit(1)
   const replacements = {};
-  const existingNames = new Set(Object.keys(template.Resources));
-  const proposedNames = new Map(); // Track all proposed new names
+  const existingNames = new Set(logicalIds);
+  const proposedNames = new Map();
 
-  // First pass: identify resources to rename and check for collisions
+  // First pass: identify resources to rename
   for (const logicalId of logicalIds) {
     let newLogicalId = logicalId;
-
-    // First apply postfix removals
-    for (const [postfixPattern, postfixReplacement] of postfixReplacements) {
-      // console.log('postfixPattern', postfixPattern)
-      newLogicalId = newLogicalId.replace(postfixPattern, postfixReplacement);
-    }
-
-    // Then apply the main pattern/replacement
-    if (typeof pattern === 'string') {
+    // console.log('logicalId', logicalId, pattern, replacement)
+    if (postfixReplacements) {
+      // Handle random string replacements
+      for (const [postfixPattern, postfixReplacement] of postfixReplacements) {
+        // console.log('postfixPattern', postfixPattern)
+        // console.log('postfixReplacement', postfixReplacement)
+        newLogicalId = newLogicalId.replace(postfixPattern, postfixReplacement);
+      }
+    } else if (pattern) {
+      console.log('pattern', logicalId)
+      // Handle user-specified replacements
       newLogicalId = handleReplacement(pattern, replacement, newLogicalId, template.Resources[logicalId]);
-    } else if (pattern instanceof RegExp) {
-      newLogicalId = handleReplacement(pattern, replacement, newLogicalId, template.Resources[logicalId]);
     }
+    console.log('newLogicalId', newLogicalId)
 
     if (newLogicalId && newLogicalId !== logicalId) {
-      // Check if the new name would collide with:
-      // 1. An existing resource that won't be renamed
-      // 2. Another resource that would be renamed to the same name
+      // Check for collisions
       const wouldCollide = (
         (existingNames.has(newLogicalId) && !proposedNames.has(logicalId)) || 
         Array.from(proposedNames.values()).includes(newLogicalId)

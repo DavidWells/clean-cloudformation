@@ -1,5 +1,6 @@
 const Ajv = require('ajv')
 const { loadSchema, schemaCache } = require('./schemas')
+const { resolveResources, getResourcesEntries } = require('./resolve-resources')
 
 // Create AJV instance with schema loading capability
 const ajv = new Ajv({
@@ -12,10 +13,14 @@ const ajv = new Ajv({
 
 async function validateTemplate(template) {
   let isValid = true
-  
-  if (!template.Resources) return isValid
+  const { Resources, via } = resolveResources(template)
+  if (!Resources) {
+    console.log(`No Resources found in ${via} template`)
+    return isValid
+  }
 
-  const resources = Object.entries(template.Resources)
+  const resources = getResourcesEntries(template)
+  console.log('resources', resources)
 
   // Validate no resources have the same logical ID
   const logicalIds = resources.map(([logicalId]) => logicalId)

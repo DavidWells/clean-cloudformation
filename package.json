@@ -13,6 +13,7 @@
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
-    "adm-zip": "^0.5.16"
+    "adm-zip": "^0.5.16",
+    "uvu": "^0.5.6"
   }
 }
