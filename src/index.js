@@ -8,12 +8,13 @@ const { formatYaml } = require('./utils/formatters-yaml')
 const { collectNames } = require('./utils/collect-name-props')
 const { getResourceCounts } = require('./utils/resource-count')
 const { addSectionHeaders } = require('./utils/yaml-headers')
-const { stringify, extractYamlComments } = require('@davidwells/yaml-utils')
+const { stringify, parse, extractYamlComments } = require('@davidwells/yaml-utils')
 const { resolveResources, getLogicalIds } = require('./utils/resolve-resources')
 const https = require('https')
 const http = require('http')
-const { getCfnSchema } = require('./utils/yaml-schema')
+const { getCfnSchema, dumpYaml } = require('./utils/yaml-schema')
 const { deepLog } = require('./utils/logger')
+
 async function cleanCloudFormation(input, opts = {}) {
   const _options = opts || {}
   const defaultOptions = {
@@ -37,15 +38,24 @@ async function cleanCloudFormation(input, opts = {}) {
     throw new Error('Template is required')
   }
 
-  deepLog('template', template)
+  // deepLog('template', template)
+  // process.exit(1)
+
+  /*
+  const earlyDump = dumpYaml(template)
+  console.log('earlyDump', earlyDump)
   process.exit(1)
+  /** */
 
   // Get resource counts and prompts
   const { resourcesByCount, resourcesPrompt } = getResourceCounts(template);
 
+  
   /* Process the template object */
   const { randomStrings } = formatTemplate(template)
   // console.log('randomStrings', randomStrings)
+
+
 
   // First handle random string replacements
   const { Resources, via } = resolveResources(template)
@@ -104,8 +114,8 @@ async function cleanCloudFormation(input, opts = {}) {
     lineWidth: -1
   }).trim()
 
-  console.log('yamlContentTwo', yamlContentTwo)
-  process.exit(1)
+  // console.log('yamlContentTwo', yamlContentTwo)
+  // process.exit(1)
 
   // Convert to YAML
   let yamlContent
@@ -124,8 +134,10 @@ async function cleanCloudFormation(input, opts = {}) {
       forceQuotes: false, // Only quote when necessary
       schema: getCfnSchema() // Add schema here
     })
+    /*
     console.log('yamlContent', yamlContent)
     process.exit(1)
+    /** */
   } catch(e) {
     // console.log('error', e)
     // process.exit(1)
@@ -194,9 +206,48 @@ function sortTopLevelKeys(template) {
   // Add any remaining keys that weren't in our order list
   Object.keys(template).forEach(key => {
     if (!order.includes(key)) {
-      sortedTemplate[key] = template[key]
+      // Preserve arrays
+      if (Array.isArray(template[key])) {
+        sortedTemplate[key] = [...template[key]]
+      } else {
+        sortedTemplate[key] = template[key]
+      }
     }
   })
+
+  // // Sort resources if present
+  // if (sortedTemplate.Resources) {
+  //   for (const resourceKey in sortedTemplate.Resources) {
+  //     const resource = sortedTemplate.Resources[resourceKey]
+  //     // Skip if resource is an array
+  //     if (Array.isArray(resource)) {
+  //       continue
+  //     }
+      
+  //     const sortedResource = {}
+      
+  //     // Add keys in specified order if they exist
+  //     order.forEach(key => {
+  //       if (resource[key] !== undefined) {
+  //         sortedResource[key] = resource[key]
+  //       }
+  //     })
+
+  //     // Add any remaining keys that weren't in our order list
+  //     Object.keys(resource).forEach(key => {
+  //       if (!order.includes(key)) {
+  //         // Preserve arrays
+  //         if (Array.isArray(resource[key])) {
+  //           sortedResource[key] = [...resource[key]]
+  //         } else {
+  //           sortedResource[key] = resource[key]
+  //         }
+  //       }
+  //     })
+      
+  //     sortedTemplate.Resources[resourceKey] = sortIAMPolicyProperties(sortedResource)
+  //   }
+  // }
 
   return sortedTemplate
 }
@@ -362,8 +413,12 @@ function parseInput(input, options = {}) {
 
     const cfnSchema = getCfnSchema()
     console.log('cfnSchema', cfnSchema)
+
+
     try {
       template = yaml.load(cleanYml, { schema: cfnSchema })
+      console.log('template', template.Resources.RedirectBucketPolicy)
+      process.exit(1)
     } catch (e) {
       parseErrors.push(e)
       try {

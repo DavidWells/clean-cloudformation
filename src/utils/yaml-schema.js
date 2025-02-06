@@ -47,6 +47,24 @@ function getCfnSchema() {
   return yaml.DEFAULT_SCHEMA.extend(cfnTags)
 }
 
+function dumpYaml(template) {
+  return yaml.dump(template, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    noArrayIndent: false,
+    flowStyle: false,
+    styles: {
+      '!!null': 'empty',
+      '!!str': 'plain'
+    },
+    quotingType: '"',  // Use double quotes instead of single quotes
+    forceQuotes: false, // Only quote when necessary
+    schema: getCfnSchema() // Add schema here
+  })
+}
+
 module.exports = {
-  getCfnSchema
+  getCfnSchema,
+  dumpYaml
 } 

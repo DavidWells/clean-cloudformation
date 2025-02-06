@@ -1,6 +1,7 @@
 // Functions for formatting and cleaning CloudFormation templates
 
 const util = require('util')
+const { dumpYaml } = require('./yaml-schema')
 
 function deepLog(objOrLabel, logVal) {
   let obj = objOrLabel
@@ -20,8 +21,12 @@ function formatTemplate(template) {
   }
   // Clean CDK-specific elements
   removeRootCdkNag(template)
+
+
   removeBootstrapVersionRule(template)
+  
   removeBootstrapVersionParameter(template)
+  
 
   // Clean template structure
   cleanMetadata(template)
@@ -39,7 +44,13 @@ function formatTemplate(template) {
   /* Remove CDK tags from resources */
   removeCdkTags(template)
   transformParameterArrays(template)
+  
   sortResourceKeys(template)
+
+  /*
+  console.log('template', dumpYaml(template))
+  process.exit(1)
+  /** */
 
   // deepLog('template', template)
   // process.exit(1)
@@ -369,27 +380,52 @@ function sortResourceKeys(template) {
     'Metadata'
   ]
 
+  /*
+  console.log('template', dumpYaml(template))
+  process.exit(1)
+  /** */
+
   for (const resourceKey in template.Resources) {
     const resource = template.Resources[resourceKey]
+    
+    // Skip if resource is an array (e.g., Fn::ForEach)
+    if (Array.isArray(resource)) {
+      continue
+    }
+    
     const sortedResource = {}
     
     // Add keys in specified order if they exist
     order.forEach(key => {
       if (resource[key] !== undefined) {
-        sortedResource[key] = resource[key]
+        // Preserve arrays
+        if (Array.isArray(resource[key])) {
+          sortedResource[key] = [...resource[key]]
+        } else {
+          sortedResource[key] = resource[key]
+        }
       }
     })
 
     // Add any remaining keys that weren't in our order list
     Object.keys(resource).forEach(key => {
       if (!order.includes(key)) {
-        sortedResource[key] = resource[key]
+        // Preserve arrays
+        if (Array.isArray(resource[key])) {
+          sortedResource[key] = [...resource[key]]
+        } else {
+          sortedResource[key] = resource[key]
+        }
       }
     })
 
     // Sort IAM Policy properties if applicable
     template.Resources[resourceKey] = sortIAMPolicyProperties(sortedResource)
   }
+  /*
+  console.log('template', dumpYaml(template))
+  process.exit(1)
+  /** */
 }
 
 // Add this new function after transformParameterArrays
