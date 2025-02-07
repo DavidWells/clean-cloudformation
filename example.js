@@ -235,6 +235,10 @@ ${diff.diff}
 
 example(
   // {
+  //   url: 'https://raw.githubusercontent.com/panacloud-modern-global-apps/full-stack-serverless-cdk/798c98300b89cfb5eac6004cd348fa60d05f813b/step16_simple_email_service/python/sending_email_using%20_ses_lambdaa/cdk.out/PythonStack.template.json',
+  //   name: 'simple_email_service'
+  // },
+  // {
   //   url: 'https://raw.githubusercontent.com/mattymoomoo/aws-power-tuner-ui/4fbb6cf506aa6e0781f121818e8933ef9ce6794d/cdk/template.yml',
   //   name: 'aws-power-tuner-ui'
   // },
@@ -257,10 +261,11 @@ example(
   //'https://raw.githubusercontent.com/kknd4eva/SohWithEventBridge/refs/heads/master/SohWithEventBridge/serverless.yaml',
   //'https://raw.githubusercontent.com/zoph-io/serverless-aws-https-webredirect/6c99fef9218c47f80bacb1236c8f5d964834ef8b/template.yml',
   // './fixtures/broken.yml',
+  './fixtures/inline-function.yml',
   // './fixtures/tiny-two.yml'
   // './fixtures/serverless.yml',
   //'./fixtures/stack-one.json',
-  './fixtures/stack-one-yaml.yml',
+  // './fixtures/stack-one-yaml.yml',
   // './fixtures/stack-two.json',
   // './fixtures/stack-two.yml',
   // './fixtures/tiny.yml',

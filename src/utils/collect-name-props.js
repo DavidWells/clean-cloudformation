@@ -147,7 +147,7 @@ async function collectNames(template, options = {}) {
 
 function generatePrompt(results) {
   const prompt = `
-Please rename the following Cloudformation resources to be more descriptive and easier to understand.
+Please rename the following CloudFormation resources to be more descriptive and easier to understand.
 
 Naming Rules:
 

@@ -150,7 +150,10 @@ async function cleanCloudFormation(input, opts = {}) {
   })
 
   // Collect IAM resources and policies
-  const { iamResources, inlinePolicies, prompt: iamPrompt } = await collectIAMResources(transformedTemplate)
+  const { iamResources, inlinePolicies, prompt: iamPrompt } = await collectIAMResources(
+    transformedTemplate,
+    yamlContentTwo // Pass in the YAML string
+  )
 
   // differ here
   let diffOutput = ''

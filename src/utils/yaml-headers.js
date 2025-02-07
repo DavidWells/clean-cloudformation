@@ -1,26 +1,26 @@
 const SECTION_HEADERS = {
   Rules: {
-    title: 'Cloudformation Rules',
+    title: 'CloudFormation Rules',
     description: 'Rules that validate parameter selections'
   },
   Mappings: {
-    title: 'Cloudformation Mappings',
+    title: 'CloudFormation Mappings',
     description: 'Maps keys to values, similar to a lookup table'
   },
   Parameters: {
-    title: 'Cloudformation Parameters',
+    title: 'CloudFormation Parameters',
     description: 'Input parameters for the stack'
   },
   Conditions: {
-    title: 'Cloudformation Conditions',
+    title: 'CloudFormation Conditions',
     description: 'Conditions that control resource creation'
   },
   Resources: {
-    title: 'Cloudformation Resources',
+    title: 'CloudFormation Resources',
     description: 'AWS resources to be created'
   },
   Outputs: {
-    title: 'Cloudformation Outputs',
+    title: 'CloudFormation Outputs',
     description: 'Stack output values'
   }
 };

@@ -43,7 +43,7 @@ function stringifyResource(resource) {
   return JSON.stringify(resource)
 }
 
-async function collectIAMResources(template) {
+async function collectIAMResources(template, yamlString) {
   const iamResources = new Set()
   const inlinePolicies = new Set()
   const managedPolicies = new Set()
@@ -103,13 +103,15 @@ async function collectIAMResources(template) {
     // If we're at a resource root, get its type
     if (path.length === 2 && path[0] === 'Resources' && obj.Type) {
       resourceType = obj.Type
+      const logicalId = path[1]
       
       // Collect IAM resources
       if (resourceType.startsWith('AWS::IAM::')) {
         iamResources.add({
           path: path.join('.'),
           type: resourceType,
-          resource: obj
+          resource: obj,
+          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
         })
       }
     }
@@ -123,49 +125,59 @@ async function collectIAMResources(template) {
 
       // Inline policies
       if (obj.PolicyDocument) {
+        const logicalId = path[1]
         inlinePolicies.add({
           path: path.join('.'),
           resourceType,
-          policy: obj.PolicyDocument
+          policy: obj.PolicyDocument,
+          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
         })
       }
 
       // Managed policy ARNs
       if (obj.ManagedPolicyArns) {
+        const logicalId = path[1]
         managedPolicies.add({
           path: path.join('.'),
           resourceType,
-          arns: obj.ManagedPolicyArns
+          arns: obj.ManagedPolicyArns,
+          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
         })
       }
 
       // Assume role policy document
       if (obj.AssumeRolePolicyDocument) {
+        const logicalId = path[1]
         assumeRolePolicies.add({
           path: path.join('.'),
           resourceType,
-          policy: obj.AssumeRolePolicyDocument
+          policy: obj.AssumeRolePolicyDocument,
+          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
         })
       }
 
       // Permissions boundary
       if (obj.PermissionsBoundary) {
+        const logicalId = path[1]
         permissionsBoundaries.add({
           path: path.join('.'),
           resourceType,
-          boundary: obj.PermissionsBoundary
+          boundary: obj.PermissionsBoundary,
+          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
         })
       }
 
       // Array of policies
       if (Array.isArray(obj.Policies)) {
+        const logicalId = path[1]
         obj.Policies.forEach((policy, index) => {
           if (policy && policy.PolicyDocument) {
             inlinePolicies.add({
               path: `${path.join('.')}.Policies[${index}]`,
               resourceType,
               policy: policy.PolicyDocument,
-              name: policy.PolicyName
+              name: policy.PolicyName,
+              yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
             })
           }
         })
@@ -245,53 +257,57 @@ function generatePrompt(
   permissionsBoundaries,
   permissionsByResource,
 ) {
-  const iamResourcesMarkdown = iamResources.map(({ path, type, resource }) => {
+  const iamResourcesMarkdown = iamResources.map(({ path, type, resource, yaml }) => {
     return `Resource: \`${path}\`
 Type: \`${type}\`
 Details:
 
-\`\`\`json
-${formatJson(resource)}
+\`\`\`yaml
+${yaml || '# YAML not available'}
 \`\`\`
 `
   }).join('\n')
 
-  const assumeRolePoliciesMarkdown = assumeRolePolicies.map(({ path, resourceType, policy }) => {
+  const assumeRolePoliciesMarkdown = assumeRolePolicies.map(({ path, resourceType, yaml }) => {
     return `Location: \`${path}\`
 Resource Type: \`${resourceType}\`
-Policy:
-\`\`\`json
-${formatJson(policy)}
+Details:
+
+\`\`\`yaml
+${yaml || '# YAML not available'}
 \`\`\`
 `
   }).join('\n')
 
-  const inlinePoliciesMarkdown = inlinePolicies.map(({ path, resourceType, policy, name }) => {
+  const inlinePoliciesMarkdown = inlinePolicies.map(({ path, resourceType, name, yaml }) => {
     return `Location: \`${path}\`${name ? `\nName: \`${name}\`` : ''}
 Resource Type: \`${resourceType}\`
-Policy:
-\`\`\`json
-${formatJson(policy)}
+Details:
+
+\`\`\`yaml
+${yaml || '# YAML not available'}
 \`\`\`
 `
   }).join('\n')
 
-  const managedPoliciesMarkdown = managedPolicies.map(({ path, resourceType, arns }) => {
+  const managedPoliciesMarkdown = managedPolicies.map(({ path, resourceType, yaml }) => {
     return `Location: \`${path}\`
 Resource Type: \`${resourceType}\`
-ARNs:
-\`\`\`json
-${formatJson(arns)}
+Details:
+
+\`\`\`yaml
+${yaml || '# YAML not available'}
 \`\`\`
 `
   }).join('\n')
 
-  const permissionsBoundariesMarkdown = permissionsBoundaries.map(({ path, resourceType, boundary }) => {
+  const permissionsBoundariesMarkdown = permissionsBoundaries.map(({ path, resourceType, yaml }) => {
     return `Location: \`${path}\`
 Resource Type: \`${resourceType}\`
-Boundary:
-\`\`\`json
-${formatJson(boundary)}
+Details:
+
+\`\`\`yaml
+${yaml || '# YAML not available'}
 \`\`\`
 `
   }).join('\n')

@@ -1,17 +1,22 @@
-// Functions for formatting and cleaning CloudFormation templates
+const removeEmptyTopLevelKeys = require('./formatters/remove-empty-top-level-keys')
+const {
+  removeCDKRootNag,
+  removeCDKBootstrapVersionRule,
+  removeCDKBootstrapVersionParameter,
+  removeCDKMetadata,
+  removeCDKResourceMetadata,
+  removeCDKTagsFromResources,
+  removeCDKMetadataCondition
+} = require('./formatters/cdk')
 
-const util = require('util')
-const { dumpYaml } = require('./yaml-schema')
 
-function deepLog(objOrLabel, logVal) {
-  let obj = objOrLabel
-  if (typeof objOrLabel === 'string') {
-    obj = logVal
-    console.log(objOrLabel)
-  }
-  console.log(util.inspect(obj, false, null, true))
-}
-
+/**
+ * Formats and cleans a CloudFormation template by removing empty keys, CDK-specific elements,
+ * cleaning up condition/resource names, transforming parameter arrays, and sorting resource keys
+ * @param {Object} template - The CloudFormation template object to format
+ * @returns {{template: Object, randomStrings: string[]}} The formatted template and array of removed random strings
+ * @throws {Error} If template is missing or not an object
+ */
 function formatTemplate(template) {
   if (!template) {
     throw new Error('Template is required')
@@ -19,30 +24,31 @@ function formatTemplate(template) {
   if (typeof template !== 'object') {
     throw new Error('Template must be an object')
   }
-  // Clean CDK-specific elements
-  removeRootCdkNag(template)
 
+  /* Trim empty top level keys */
+  removeEmptyTopLevelKeys(template)
 
-  removeBootstrapVersionRule(template)
+  /* Clean CDK-specific elements */
+  removeCDKRootNag(template)
+  removeCDKBootstrapVersionRule(template)
+  removeCDKBootstrapVersionParameter(template)
+  removeCDKMetadata(template)
+  removeCDKResourceMetadata(template)
+  removeCDKMetadataCondition(template)
+  removeCDKTagsFromResources(template)
   
-  removeBootstrapVersionParameter(template)
-  
-
-  // Clean template structure
-  cleanMetadata(template)
-  removeCdkMetadata(template)
-  removeMetadataCondition(template)
   /* Remove Hex postfix from conditions and resource names */
   //*
   const conditionMatches = cleanConditionNames(template) || []
   const resourceMatches = cleanResourceNames(template) || []
   /** */
-  // console.log('conditionMatches', conditionMatches)
-  // console.log('resourceMatches', resourceMatches)
-  // process.exit(1)
 
-  /* Remove CDK tags from resources */
-  removeCdkTags(template)
+  /*
+  console.log('conditionMatches', conditionMatches)
+  console.log('resourceMatches', resourceMatches)
+  process.exit(1)
+  /** */
+  
   transformParameterArrays(template)
   
   sortResourceKeys(template)
@@ -52,121 +58,13 @@ function formatTemplate(template) {
   process.exit(1)
   /** */
 
-  // deepLog('template', template)
-  // process.exit(1)
-
   return {
     template,
     randomStrings: [...conditionMatches, ...resourceMatches]
   }
 }
 
-// Add this new function at the start
-function removeRootCdkNag(template) {
-  if (!template.Metadata) return
-
-  // Remove CDK Nag metadata from root level
-  if (template.Metadata['aws:cdk:path']) {
-    delete template.Metadata['aws:cdk:path']
-  }
-
-  if (template.Metadata && template.Metadata.cdk_nag) {
-    delete template.Metadata.cdk_nag
-  }
-  // Remove empty Metadata object
-  if (Object.keys(template.Metadata).length === 0) {
-    delete template.Metadata
-  }
-}
-
-// Add this new function after removeRootCdkNag
-function removeBootstrapVersionRule(template) {
-  if (template.Rules && template.Rules.CheckBootstrapVersion) {
-    delete template.Rules.CheckBootstrapVersion
-    
-    // Remove empty Rules object
-    if (Object.keys(template.Rules).length === 0) {
-      delete template.Rules
-    }
-  }
-}
-
-// Add this new function after removeBootstrapVersionRule
-function removeBootstrapVersionParameter(template) {
-  if (template.Parameters && 
-      template.Parameters.BootstrapVersion && 
-      template.Parameters.BootstrapVersion.Default && 
-      template.Parameters.BootstrapVersion.Default.startsWith('/cdk-bootstrap/')) {
-    
-    delete template.Parameters.BootstrapVersion
-    
-    // Remove empty Parameters object
-    if (Object.keys(template.Parameters).length === 0) {
-      delete template.Parameters
-    }
-  }
-}
-
-// Function to recursively remove aws:cdk:path and cfn_nag from Metadata
-function cleanMetadata(obj) {
-  if (obj && typeof obj === 'object') {
-    if (obj.Metadata) {
-      // Remove aws:cdk:path
-      if (obj.Metadata['aws:cdk:path']) {
-        delete obj.Metadata['aws:cdk:path']
-      }
-      // Remove cfn_nag
-      if (obj.Metadata.cfn_nag) {
-        delete obj.Metadata.cfn_nag
-      }
-      // Remove cdk_nag
-      if (obj.Metadata.cdk_nag) {
-        delete obj.Metadata.cdk_nag
-      }
-      // Remove aws:asset keys
-      Object.keys(obj.Metadata).forEach(key => {
-        if (key.startsWith('aws:asset:')) {
-          delete obj.Metadata[key]
-        }
-      })
-      // Remove empty Metadata objects
-      if (Object.keys(obj.Metadata).length === 0) {
-        delete obj.Metadata
-      }
-    }
-
-    // Recursively process all properties
-    for (const key in obj) {
-      cleanMetadata(obj[key])
-    }
-  }
-}
-
-// Function to remove CDK Metadata resources
-function removeCdkMetadata(template) {
-  if (!template.Resources) return
-
-  const resources = template.Resources
-  for (const key in resources) {
-    if (resources[key].Type === 'AWS::CDK::Metadata') {
-      delete resources[key]
-    }
-  }
-}
-
-// Add this new function
-function removeMetadataCondition(template) {
-  if (template.Conditions && template.Conditions.CDKMetadataAvailable) {
-    delete template.Conditions.CDKMetadataAvailable
-
-    // Remove the Conditions object if it's empty
-    if (Object.keys(template.Conditions).length === 0) {
-      delete template.Conditions
-    }
-  }
-}
-
-// Add this new function after removeMetadataCondition
+// Add this new function after removeCDKMetadataCondition
 function cleanConditionNames(template) {
   // Skip if no conditions
   if (!template.Conditions) return
@@ -316,38 +214,7 @@ function cleanResourceNames(template) {
   return allMatches
 }
 
-
-// Add this new function after cleanResourceNames
-function removeCdkTags(template) {
-  if (!template.Resources) return
-
-  for (const resource of Object.values(template.Resources)) {
-    if (resource.Properties && resource.Properties.Tags) {
-      // Ensure Tags is an array
-      const tags = Array.isArray(resource.Properties.Tags) 
-        ? resource.Properties.Tags 
-        : [resource.Properties.Tags]
-
-      // Filter out aws-cdk: tags and cr-owned tags
-      resource.Properties.Tags = tags.filter(tag => {
-        // Check if tag is a valid object with a Key property
-        return tag && 
-               typeof tag === 'object' && 
-               tag.Key && 
-               typeof tag.Key === 'string' && 
-               !tag.Key.startsWith('aws-cdk:') && 
-               !tag.Key.includes('cr-owned:')
-      })
-
-      // Remove empty Tags array
-      if (resource.Properties.Tags.length === 0) {
-        delete resource.Properties.Tags
-      }
-    }
-  }
-}
-
-// Add this new function after removeCdkTags
+// Add this new function after removeCDKTagsFromResources
 function transformParameterArrays(template) {
   if (!template.Parameters) return
 
@@ -364,26 +231,148 @@ function transformParameterArrays(template) {
   }
 }
 
-// Modify the sortResourceKeys function to include IAM Policy sorting
+const RESOURCE_KEY_ORDER = [
+  'Type',
+  'Version',
+  'Description',
+  'Condition',
+  'DependsOn',
+  'DeletionPolicy',
+  'CreationPolicy',
+  'UpdatePolicy',
+  'UpdateReplacePolicy',
+  'Properties',
+  'Metadata'
+]
+
+const COMMON_PROPERTY_ORDER = [
+  'Name',
+  'Description',
+  'Tags',
+  'ServiceToken'
+]
+
+// Resource type specific property orders
+const PROPERTY_ORDERS = {
+  'AWS::Lambda::Function': { 
+    sort: [
+      'FunctionName',
+      'Description',
+      'Role',
+      'Runtime',
+      'Architectures',
+      'Handler',
+      'MemorySize',
+      'Timeout',
+      'Code',
+      'Environment',
+      'VpcConfig',
+    ],
+    getAlwaysLast: (properties) => {
+      const alwaysLast = []
+      if (properties.Code?.ZipFile && isMultilineString(properties.Code.ZipFile)) {
+        alwaysLast.push('Code')
+      }
+      return alwaysLast
+    }
+  },
+  'AWS::S3::Bucket': { 
+    sort: [
+      'BucketName',
+      'AccessControl',
+      'BucketEncryption',
+      'PublicAccessBlockConfiguration',
+      'VersioningConfiguration',
+      'WebsiteConfiguration',
+    ],
+    alwaysLast: ['Runtime']
+  },
+  'AWS::CloudFront::Function': { 
+    sort: [
+      'Name',
+      'Description',
+      'AutoPublish'
+    ],
+    getAlwaysLast: (properties) => {
+      const alwaysLast = []
+      if (properties.FunctionCode && isMultilineString(properties.FunctionCode)) {
+        alwaysLast.push('FunctionCode')
+      }
+      return alwaysLast
+    }
+  },
+  // Add more resource types as needed
+}
+
+function isMultilineString(value) {
+  // Check if it's a string with newlines
+  if (typeof value === 'string' && value.includes('\n')) {
+    return true
+  }
+
+  // Check if it's an object with Fn::Sub
+  if (value && typeof value === 'object') {
+    const subValue = value['Fn::Sub'] || value['Ref::Sub']
+    if (typeof subValue === 'string' && subValue.includes('\n')) {
+      return true
+    }
+    const joinValue = value['Fn::Join'] || value['Ref::Join']
+    if (joinValue && Array.isArray(joinValue) && joinValue.length > 1) {
+      return joinValue.some(item => isMultilineString(item))
+    }
+  }
+
+  return false
+}
+
+function sortProperties(properties, resourceType) {
+  if (!properties || typeof properties !== 'object') return properties
+
+  const sortedProps = {}
+  const resourceTypeConfig = PROPERTY_ORDERS[resourceType] || {}
+  const propertyOrder = resourceTypeConfig.sort || COMMON_PROPERTY_ORDER
+  
+  // Get alwaysLast properties - either from function or static array
+  const alwaysLast = resourceTypeConfig.getAlwaysLast 
+    ? resourceTypeConfig.getAlwaysLast(properties)
+    : (resourceTypeConfig.alwaysLast || [])
+  
+  // Remove Tags and alwaysLast properties from propertyOrder
+  const orderWithoutSpecial = propertyOrder.filter(key => 
+    key !== 'Tags' && !alwaysLast.includes(key)
+  )
+  
+  // Add properties in specified order (except Tags and alwaysLast)
+  orderWithoutSpecial.forEach(key => {
+    if (properties[key] !== undefined) {
+      sortedProps[key] = properties[key]
+    }
+  })
+
+  // Add remaining properties (except Tags and alwaysLast)
+  Object.keys(properties).forEach(key => {
+    if (key !== 'Tags' && !alwaysLast.includes(key) && !orderWithoutSpecial.includes(key)) {
+      sortedProps[key] = properties[key]
+    }
+  })
+
+  // Add Tags if it exists
+  if (properties.Tags !== undefined) {
+    sortedProps.Tags = properties.Tags
+  }
+
+  // Add alwaysLast properties in order after Tags
+  alwaysLast.forEach(key => {
+    if (properties[key] !== undefined) {
+      sortedProps[key] = properties[key]
+    }
+  })
+
+  return sortedProps
+}
+
 function sortResourceKeys(template) {
   if (!template.Resources) return
-
-  const order = [
-    'Type',
-    'Condition',
-    'DependsOn',
-    'DeletionPolicy',
-    'CreationPolicy',
-    'UpdatePolicy',
-    'UpdateReplacePolicy',
-    'Properties',
-    'Metadata'
-  ]
-
-  /*
-  console.log('template', dumpYaml(template))
-  process.exit(1)
-  /** */
 
   for (const resourceKey in template.Resources) {
     const resource = template.Resources[resourceKey]
@@ -396,10 +385,12 @@ function sortResourceKeys(template) {
     const sortedResource = {}
     
     // Add keys in specified order if they exist
-    order.forEach(key => {
+    RESOURCE_KEY_ORDER.forEach(key => {
       if (resource[key] !== undefined) {
-        // Preserve arrays
-        if (Array.isArray(resource[key])) {
+        if (key === 'Properties') {
+          // Sort properties based on resource type
+          sortedResource[key] = sortProperties(resource[key], resource.Type)
+        } else if (Array.isArray(resource[key])) {
           sortedResource[key] = [...resource[key]]
         } else {
           sortedResource[key] = resource[key]
@@ -409,8 +400,7 @@ function sortResourceKeys(template) {
 
     // Add any remaining keys that weren't in our order list
     Object.keys(resource).forEach(key => {
-      if (!order.includes(key)) {
-        // Preserve arrays
+      if (!RESOURCE_KEY_ORDER.includes(key)) {
         if (Array.isArray(resource[key])) {
           sortedResource[key] = [...resource[key]]
         } else {
@@ -422,37 +412,77 @@ function sortResourceKeys(template) {
     // Sort IAM Policy properties if applicable
     template.Resources[resourceKey] = sortIAMPolicyProperties(sortedResource)
   }
-  /*
-  console.log('template', dumpYaml(template))
-  process.exit(1)
-  /** */
 }
 
-// Add this new function after transformParameterArrays
+const IAM_RESOURCE_TYPES = [
+  'AWS::IAM::Policy',
+  'AWS::IAM::Role',
+  'AWS::IAM::User',
+  'AWS::IAM::Group',
+]
+
+const IAM_SORT_ORDER = [
+  'PolicyName',
+  'ManagedPolicyArns',
+  'Roles',
+  'PolicyDocument',
+]
+
+const POLICY_DOCUMENT_SORT_ORDER = [
+  'Version',
+  'Id',
+  'Sid',
+  'Statement',
+]
+
+function sortPolicyDocument(policyDoc) {
+  if (!policyDoc || typeof policyDoc !== 'object') return policyDoc
+
+  const sortedPolicyDoc = {}
+  
+  // Add keys in specified order if they exist
+  POLICY_DOCUMENT_SORT_ORDER.forEach(docKey => {
+    if (policyDoc[docKey] !== undefined) {
+      sortedPolicyDoc[docKey] = policyDoc[docKey]
+    }
+  })
+
+  // Add any remaining keys
+  Object.keys(policyDoc).forEach(docKey => {
+    if (!POLICY_DOCUMENT_SORT_ORDER.includes(docKey)) {
+      sortedPolicyDoc[docKey] = policyDoc[docKey]
+    }
+  })
+
+  return sortedPolicyDoc
+}
+
 function sortIAMPolicyProperties(resource) {
-  if (resource.Type !== 'AWS::IAM::Policy' || !resource.Properties) {
+  if (!IAM_RESOURCE_TYPES.includes(resource.Type) || !resource.Properties) {
     return resource
   }
-
-  const order = [
-    'PolicyName',
-    'Roles',
-    'PolicyDocument',
-  ]
 
   const sortedProperties = {}
   
   // Add properties in specified order if they exist
-  order.forEach(key => {
+  IAM_SORT_ORDER.forEach(key => {
     if (resource.Properties[key] !== undefined) {
-      sortedProperties[key] = resource.Properties[key]
+      if (key === 'PolicyDocument' || key === 'AssumeRolePolicyDocument') {
+        sortedProperties[key] = sortPolicyDocument(resource.Properties[key])
+      } else {
+        sortedProperties[key] = resource.Properties[key]
+      }
     }
   })
 
   // Add any remaining properties that weren't in our order list
   Object.keys(resource.Properties).forEach(key => {
-    if (!order.includes(key)) {
-      sortedProperties[key] = resource.Properties[key]
+    if (!IAM_SORT_ORDER.includes(key)) {
+      if (key === 'AssumeRolePolicyDocument') {
+        sortedProperties[key] = sortPolicyDocument(resource.Properties[key])
+      } else {
+        sortedProperties[key] = resource.Properties[key]
+      }
     }
   })
 
@@ -461,7 +491,7 @@ function sortIAMPolicyProperties(resource) {
 }
 
 module.exports = {
-  removeRootCdkNag,
-  removeCdkMetadata,
+  removeCDKRootNag,
+  removeCDKResourceMetadata,
   formatTemplate
 } 

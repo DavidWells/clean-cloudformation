@@ -1,6 +1,6 @@
 const { test } = require('uvu')
 const assert = require('uvu/assert')
-const { cleanCloudFormation } = require('./index')
+const { cleanCloudFormation } = require('../src')
 const fs = require('fs').promises
 const path = require('path')
 
