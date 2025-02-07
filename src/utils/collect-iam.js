@@ -1,5 +1,6 @@
 const { resolveResources, getResourcesEntries } = require('./resolve-resources')
 const  stringifyJson = require('json-stringify-pretty-compact')
+const { getResourceBlock } = require('./yaml-blocks')
 
 function stringifyResource(resource) {
   if (typeof resource === 'string') {
@@ -227,7 +228,7 @@ async function collectIAMResources(template) {
       foundManagedPolicies,
       foundAssumeRolePolicies,
       foundPermissionsBoundaries,
-      permissionsByResource
+      permissionsByResource,
     )
   }
 }
@@ -242,7 +243,7 @@ function generatePrompt(
   managedPolicies, 
   assumeRolePolicies, 
   permissionsBoundaries,
-  permissionsByResource
+  permissionsByResource,
 ) {
   const iamResourcesMarkdown = iamResources.map(({ path, type, resource }) => {
     return `Resource: \`${path}\`
