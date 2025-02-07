@@ -8,9 +8,12 @@
     "validate-schemas": "node scripts/validate-schema.js"
   },
   "dependencies": {
-    "@davidwells/yaml-utils": "^0.0.5",
+    "@davidwells/yaml-utils": "^0.0.6",
     "ajv": "^8.12.0",
-    "js-yaml": "^4.1.0"
+    "diff": "^7.0.0",
+    "jest-diff": "^29.7.0",
+    "js-yaml": "^4.1.0",
+    "strip-ansi": "^6.0.1"
   },
   "devDependencies": {
     "adm-zip": "^0.5.16",

@@ -14,6 +14,8 @@ const https = require('https')
 const http = require('http')
 const { getCfnSchema, dumpYaml } = require('./utils/yaml-schema')
 const { deepLog } = require('./utils/logger')
+const { createPatch } = require('diff')
+const diff = require('deep-diff')
 
 async function cleanCloudFormation(input, opts = {}) {
   const _options = opts || {}
@@ -32,7 +34,10 @@ async function cleanCloudFormation(input, opts = {}) {
   input = await resolveInput(input)
 
   // Load and parse the template
-  const template = parseInput(input, options)
+  const { template, originalYaml } = parseInput(input, options)
+
+  // create a deep clone of the original template here
+  const originalTemplate = JSON.parse(JSON.stringify(template))
 
   if (!template) {
     throw new Error('Template is required')
@@ -143,9 +148,57 @@ async function cleanCloudFormation(input, opts = {}) {
   })
 
   // differ here
-  
+  let diffOutput = ''
+  let patch = ''
+  if (typeof input === 'string') {
+    // Create a unified diff using originalYaml
+    patch = createPatch(
+      'CloudFormation Template',
+      originalYaml,
+      yamlContentTwo,
+      'Original',
+      'Cleaned'
+    )
 
+    // Format the diff output
+    diffOutput = patch
+      .split('\n')
+      .slice(2) // Remove the diff header
+      .filter(line => line.trim()) // Remove empty lines
+      .map(line => {
+        if (line.startsWith('+')) {
+          return `\x1b[32m${line}\x1b[0m` // Green for additions
+        }
+        if (line.startsWith('-')) {
+          return `\x1b[31m${line}\x1b[0m` // Red for deletions
+        }
+        if (line.startsWith('@')) {
+          return `\x1b[36m${line}\x1b[0m` // Cyan for chunk headers
+        }
+        return line
+      })
+      .join('\n')
+  }
 
+  const jsonifyYamlContentTwo = parseInput(yamlContentTwo)
+  // console.log('jsonifyYamlContentTwo', jsonifyYamlContentTwo.template)
+  // process.exit(1)
+
+  // sort the original template and the JSONifyEMO.content2.template by their object keys alphabetically
+  const sortedOriginalTemplate = sortObjectKeys(originalTemplate)
+  const sortedJsonifyYamlContentTwo = sortObjectKeys(jsonifyYamlContentTwo.template)
+
+  // const diff = prettyDiff(sortedOriginalTemplate.Resources, sortedJsonifyYamlContentTwo.Resources)
+
+  const diffJson =  createPatch(
+      'CloudFormation Resources',
+      JSON.stringify(sortObjectKeys(sortedOriginalTemplate.Resources), null, 2),
+      JSON.stringify(sortObjectKeys(sortedJsonifyYamlContentTwo.Resources), null, 2),
+      'Original',
+      'Cleaned'
+    )
+  // console.log('diff', diff)
+  // process.exit(1)
 
   return {
     yaml: yamlContent.trim(),
@@ -158,8 +211,35 @@ async function cleanCloudFormation(input, opts = {}) {
       resourceCosts: resourcesPrompt,
       resourceNames: prompt
     },
-    originalContents: input
+    originalContents: input,
+    diff: {
+      log: diffOutput,
+      patch: patch,
+      diff: diffJson
+    }
   }
+}
+
+function sortObjectKeys(obj) {
+  return Object.keys(obj).sort().reduce((acc, key) => {
+    acc[key] = obj[key]
+    return acc
+  }, {})
+}
+
+const stripAnsi = require('strip-ansi')  // v6.0.1
+const jestDiff = require('jest-diff').diff
+
+function prettyDiff(obj1, obj2) {
+  const theDiff = jestDiff(obj1, obj2, {
+    expand: false,
+    contextLines: 0,
+    color: false
+  })
+  return stripAnsi(theDiff
+   .split('\n')
+   .filter(line => !line.includes('@@') && !line.includes('diff --git'))
+   .join('\n'))
 }
 
 function cleanKeys(arr, randomStrings) {
@@ -382,7 +462,10 @@ async function resolveInput(input) {
 
 function parseInput(input, options = {}) {
   if (typeof input === 'object') {
-    return input
+    return {
+      template: input,
+      originalYaml: dumpYaml(input)
+    }
   }
 
   if (typeof input !== 'string') {
@@ -390,10 +473,13 @@ function parseInput(input, options = {}) {
   }
 
   let template
+  let originalYaml
   let parseErrors = []
   
   try {
     template = JSON.parse(input)
+    // Convert JSON input to YAML format
+    originalYaml = dumpYaml(template)
   } catch (e) {
     parseErrors.push(e)
     let cleanYml = input
@@ -410,10 +496,12 @@ function parseInput(input, options = {}) {
     const cfnSchema = getCfnSchema()
     try {
       template = yaml.load(cleanYml, { schema: cfnSchema })
+      originalYaml = input // For YAML input, use original string
     } catch (e) {
       parseErrors.push(e)
       try {
         template = yaml.load(input, { schema: cfnSchema })
+        originalYaml = input
       } catch (e) {
         parseErrors.push(e)
         console.log('parseErrors', parseErrors)
@@ -421,7 +509,11 @@ function parseInput(input, options = {}) {
       }
     }
   }
-  return template
+
+  return {
+    template,
+    originalYaml
+  }
 }
 
 
