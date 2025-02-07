@@ -259,8 +259,8 @@ example(
   // './fixtures/broken.yml',
   // './fixtures/tiny-two.yml'
   // './fixtures/serverless.yml',
-  './fixtures/stack-one.json',
-  //'./fixtures/stack-one-yaml.yml',
+  //'./fixtures/stack-one.json',
+  './fixtures/stack-one-yaml.yml',
   // './fixtures/stack-two.json',
   // './fixtures/stack-two.yml',
   // './fixtures/tiny.yml',

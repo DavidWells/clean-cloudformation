@@ -150,7 +150,7 @@ async function cleanCloudFormation(input, opts = {}) {
   })
 
   // Collect IAM resources and policies
-  const { iamResources, inlinePolicies, prompt: iamPrompt } = await collectIAMResources(template)
+  const { iamResources, inlinePolicies, prompt: iamPrompt } = await collectIAMResources(transformedTemplate)
 
   // differ here
   let diffOutput = ''
