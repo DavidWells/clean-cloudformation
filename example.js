@@ -29,19 +29,19 @@ async function run() {
     // },
     //'https://raw.githubusercontent.com/kknd4eva/SohWithEventBridge/refs/heads/master/SohWithEventBridge/serverless.yaml',
     //'https://raw.githubusercontent.com/zoph-io/serverless-aws-https-webredirect/6c99fef9218c47f80bacb1236c8f5d964834ef8b/template.yml',
-    // './fixtures/broken.yml',
-    //'./fixtures/inline-function.yml',
-    // './fixtures/tiny-two.yml'
-    // './fixtures/serverless.yml',
-    // './fixtures/serverless-refs.yml',
-    //'./fixtures/stack-one.json',
-    './fixtures/stack-one-yaml.yml',
-    // './fixtures/stack-two.json',
-    // './fixtures/stack-two.yml',
-    // './fixtures/tiny.yml',
-    //'./fixtures/stack-three.json',
-    // './fixtures/stack-four.json',
-    // './fixtures/cdn-cloudformation.json'
+    // './tests/fixtures/broken.yml',
+    //'./tests/fixtures/inline-function.yml',
+    // './tests/fixtures/tiny-two.yml'
+    // './tests/fixtures/serverless.yml',
+    // './tests/fixtures/serverless-refs.yml',
+    //'./tests/fixtures/stack-one.json',
+    './tests/fixtures/stack-one-yaml.yml',
+    // './tests/fixtures/stack-two.json',
+    // './tests/fixtures/stack-two.yml',
+    // './tests/fixtures/tiny.yml',
+    //'./tests/fixtures/stack-three.json',
+    // './tests/fixtures/stack-four.json',
+    // './tests/fixtures/cdn-cloudformation.json'
   ).catch(err => {
     console.error('Error:', err)
     process.exit(1)

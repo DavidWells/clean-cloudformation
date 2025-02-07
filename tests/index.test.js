@@ -6,7 +6,7 @@ const path = require('path')
 
 // Helper to read fixture files
 async function readFixture(name) {
-  const fixturePath = path.join(__dirname, '..', 'fixtures', name)
+  const fixturePath = path.join(__dirname, 'fixtures', name)
   return fs.readFile(fixturePath, 'utf8')
 }
 
