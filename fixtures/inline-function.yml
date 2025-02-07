@@ -1,0 +1,25 @@
+Resources:
+  MyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      # nice
+      Code:
+        ZipFile: |
+          async function handler(event) {
+            console.log('event:', JSON.stringify(event))
+            return {
+              statusCode: 200,
+              body: JSON.stringify({ message: 'Hello from Lambda!' })
+            }
+          }
+          exports.handler = handler
+      Runtime: nodejs18.x
+      Timeout: 3
+      MemorySize: 128
+      Tags:
+        - Key: Project
+          Value: !Ref pProjectName
+        - Key: Product
+          Value: !Ref pProductName

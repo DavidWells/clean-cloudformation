@@ -1,0 +1,194 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform:
+  - "AWS::LanguageExtensions"
+  - "AWS::Serverless-2016-10-31"
+Description: "Serverless AWS webredirect (HTTPS) - https://zoph.io"
+############################################################
+Parameters:
+  ############################################################
+  pProductName:
+    Description: "Product Name"
+    Type: String
+
+  pProjectName:
+    Description: "Project Name"
+    Type: String
+
+  pSourceDomain:
+    Description: "DomainName used as source"
+    Type: String
+
+  pSourceNakedDomain:
+    Description: "Source Naked DomainName"
+    Type: String
+
+  pSourceSubDomainList:
+    Description: "List of Source SubDomainNames used as source, comma separated"
+    Type: CommaDelimitedList
+
+  pSourceSubDomainListUrl:
+    Description: "List of Source SubDomainNames URLs used as source, comma separated"
+    Type: String
+
+  pR53ZoneId:
+    Description: Source Domain Route53 Hosted Zone Id
+    Type: String
+
+  pCertificateArn:
+    Description: "ACM Certificate Arn"
+    Type: String
+
+############################################################
+Resources:
+  ############################################################
+  RedirectBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub ${pSourceDomain}-${pProductName}
+
+  RedirectBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref RedirectBucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - s3:GetObject
+            Resource: !Sub arn:aws:s3:::${pSourceDomain}-${pProductName}/*
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution.Id}"
+
+  ConfigStorage:
+    Type: AWS::CloudFront::KeyValueStore
+    Properties:
+      Comment: !Sub serverless-redirect-config-store-${pProjectName}
+      ImportSource:
+        SourceArn: !Sub arn:aws:s3:::${pProductName}-${pProjectName}-config/config.json
+        SourceType: S3
+      Name: !Sub serverless-redirect-config-store-${pProjectName}
+
+  CloudFrontFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub Redirect-Function-${pProjectName}
+      Tags: 
+        - Key: Project
+          Value: !Ref pProjectName
+        - Key: Product
+          Value: !Ref pProductName
+      FunctionConfig:
+        Comment: !Sub "Redirect function for ${pProjectName}"
+        Runtime: cloudfront-js-2.0
+        KeyValueStoreAssociations:
+          - KeyValueStoreARN: !GetAtt ConfigStorage.Arn
+      FunctionCode: !Sub |
+        import cf from "cloudfront";
+
+        const kvsId = '${ConfigStorage.Id}';
+        const kvsHandle = cf.kvs(kvsId);
+
+        function extractMainDomain(host) {
+          const parts = host.split(".");
+          return parts.length > 2
+            ? parts[parts.length - 2] + "." + parts[parts.length - 1]
+            : host;
+        }
+
+        async function handler(event) {
+          const request = event.request;
+          const host = request.headers.host.value;
+          console.log("Host: " + host);
+
+          let newUri = extractMainDomain(host); // Default to main domain
+
+          try {
+            const uriFromKvs = await kvsHandle.get(host);
+            if (uriFromKvs) {
+              newUri = uriFromKvs;
+            }
+            console.log("Target Uri: " + newUri);
+          } catch (err) {
+            console.log(request.uri + " | " + err);
+          }
+
+          const response = {
+            statusCode: 301,
+            statusDescription: "Moved Permanently",
+            headers: {
+              location: {
+                value: "https://" + newUri,
+              },
+            },
+          };
+
+          return response;
+        }
+      AutoPublish: true
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub ${pProductName}-${pProjectName}
+        Aliases:
+          Fn::Split:
+            - ","
+            - Ref: pSourceSubDomainListUrl
+        DefaultCacheBehavior:
+          TargetOriginId: s3-website
+          CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+          ViewerProtocolPolicy: redirect-to-https
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt CloudFrontFunction.FunctionARN
+        Enabled: true
+        HttpVersion: "http2"
+        DefaultRootObject: "index.htm"
+        IPV6Enabled: true
+        Origins:
+          # Origin for static assests in S3
+          - Id: s3-website
+            DomainName: !GetAtt RedirectBucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity:
+                Fn::Sub: ""
+            # Restricting Bucket access through origin access control
+            OriginAccessControlId: !GetAtt CloudFrontOAC.Id
+        PriceClass: "PriceClass_100"
+        ViewerCertificate:
+          AcmCertificateArn: !Ref "pCertificateArn"
+          MinimumProtocolVersion: "TLSv1.2_2021"
+          SslSupportMethod: "sni-only"
+      Tags:
+        - Key: Project
+          Value: !Ref pProjectName
+        - Key: Product
+          Value: !Ref pProductName
+
+  CloudFrontOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub serverless-redirect-oac-${pProjectName}
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # A CloudFormation loop on the Route53Records for each subdomain
+  Fn::ForEach::Route53RecordSet:
+    - RecordSetLogicalId
+    - !Ref pSourceSubDomainList
+    - Route53RecordSet${RecordSetLogicalId}:
+        Type: AWS::Route53::RecordSet
+        Properties:
+          HostedZoneId: !Ref pR53ZoneId
+          Name: !Sub ${RecordSetLogicalId}.${pSourceNakedDomain}
+          Type: A
+          AliasTarget:
+            HostedZoneId: Z2FDTNDATAQYW2 # Hosted zone ID for CloudFront
+            DNSName: !GetAtt CloudFrontDistribution.DomainName

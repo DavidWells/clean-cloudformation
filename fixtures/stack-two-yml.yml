@@ -280,6 +280,17 @@ Resources:
       PolicyDocument:
         Statement:
           - Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+            Effect: Deny
+            Resource:
+              - 'Fn::Join':
+                  - ''
+                  - - 'arn:'
+                    - Ref: 'AWS::Partition'
+                    - ':ssm:'
+          - Action:
               - 'ssm:GetParameters'
               - 'ssm:GetParameter'
               - 'ssm:PutParameter'
@@ -2406,8 +2417,8 @@ Resources:
       'aws:cdk:path': >-
         AWSAccelerator-InstallerStack/UpdatePipelineGithubTokenRule/AllowEventRuleAWSAcceleratorInstallerStackUpdatePipelineGithubTokenFunction2367C02A
     Condition: UseGitHubCondition
-  # multiple comments
-  # Comment here
+  # Here is a comment
+  # Here is another comment
   UpdatePipelineGithubTokenFunctionLogGroupFCE3723A:
     Type: 'AWS::Logs::LogGroup'
     Properties:

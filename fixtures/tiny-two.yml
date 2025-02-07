@@ -1,0 +1,64 @@
+Resources:
+  SolutionHelperServiceRoleF70C0E2A:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: '2012-10-17'
+  # Keep comments
+  CloudFrontFunction:
+    Type: AWS::CloudFront::Function #everywhere
+    Properties:
+      Name: !Sub Redirect-Function-${pProjectName}
+      FunctionConfig:
+        Comment: !Sub "Redirect function for ${pProjectName}"
+        Runtime: cloudfront-js-2.0
+        KeyValueStoreAssociations:
+          - KeyValueStoreARN: !GetAtt ConfigStorage.Arn
+      FunctionCode: !Sub |
+        import cf from "cloudfront";
+
+        const kvsId = '${ConfigStorage.Id}';
+        const kvsHandle = cf.kvs(kvsId);
+
+        function extractMainDomain(host) {
+          const parts = host.split(".");
+          return parts.length > 2
+            ? parts[parts.length - 2] + "." + parts[parts.length - 1]
+            : host;
+        }
+
+        async function handler(event) {
+          const request = event.request;
+          const host = request.headers.host.value;
+          console.log("Host: " + host);
+
+          let newUri = extractMainDomain(host); // Default to main domain
+
+          try {
+            const uriFromKvs = await kvsHandle.get(host);
+            if (uriFromKvs) {
+              newUri = uriFromKvs;
+            }
+            console.log("Target Uri: " + newUri);
+          } catch (err) {
+            console.log(request.uri + " | " + err);
+          }
+
+          const response = {
+            statusCode: 301,
+            statusDescription: "Moved Permanently",
+            headers: {
+              location: {
+                value: "https://" + newUri,
+              },
+            },
+          };
+
+          return response;
+        }
+      AutoPublish: true

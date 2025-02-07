@@ -62,11 +62,12 @@ async function cleanCloudFormation(input, opts = {}) {
   const { randomStrings } = formatTemplate(template)
   // console.log('randomStrings', randomStrings)
 
-
-
   // First handle random string replacements
   const { Resources, via } = resolveResources(template)
-  console.log('BeforeResources', getLogicalIds(template))
+  // console.log('template', template)
+  // console.log('Resources', Resources)
+
+  // console.log('BeforeResources', getLogicalIds(template))
   // process.exit(1)
   if (template.Resources) {
     const logicalIds = getLogicalIds(template)
@@ -115,21 +116,21 @@ async function cleanCloudFormation(input, opts = {}) {
   commentsData.comments = cleanKeys(commentsData.comments, randomStrings)
   // process.exit(1)
 
-  let yamlContentTwo = stringify(transformedTemplate, {
+  let yamlWithComments = stringify(transformedTemplate, {
     originalString: input,
     commentData: commentsData,
     lineWidth: -1
   }).trim()
 
-  // console.log('yamlContentTwo', yamlContentTwo)
+  // console.log('yamlWithComments', yamlWithComments)
   // process.exit(1)
 
   // Convert to YAML
-  let yamlContent
+  let yamlNoComments
   try {
-    yamlContent = dumpYaml(transformedTemplate)
+    yamlNoComments = dumpYaml(transformedTemplate)
     /*
-    console.log('yamlContent', yamlContent)
+    console.log('yamlNoComments', yamlNoComments)
     process.exit(1)
     /** */
   } catch(e) {
@@ -137,11 +138,11 @@ async function cleanCloudFormation(input, opts = {}) {
     // process.exit(1)
   }
 
-  yamlContent = formatYaml(yamlContent)
-  yamlContent = addSectionHeaders(yamlContent)
+  yamlNoComments = formatYaml(yamlNoComments)
+  yamlNoComments = addSectionHeaders(yamlNoComments)
 
-  yamlContentTwo = formatYaml(yamlContentTwo)
-  yamlContentTwo = addSectionHeaders(yamlContentTwo)
+  yamlWithComments = formatYaml(yamlWithComments)
+  yamlWithComments = addSectionHeaders(yamlWithComments)
 
 
   // Collect names before any transformations
@@ -152,7 +153,7 @@ async function cleanCloudFormation(input, opts = {}) {
   // Collect IAM resources and policies
   const { iamResources, inlinePolicies, prompt: iamPrompt } = await collectIAMResources(
     transformedTemplate,
-    yamlContentTwo // Pass in the YAML string
+    yamlWithComments // Pass in the YAML string
   )
 
   // differ here
@@ -163,7 +164,7 @@ async function cleanCloudFormation(input, opts = {}) {
     patch = createPatch(
       'CloudFormation Template',
       originalYaml,
-      yamlContentTwo,
+      yamlWithComments,
       'Original',
       'Cleaned'
     )
@@ -172,7 +173,7 @@ async function cleanCloudFormation(input, opts = {}) {
     diffOutput = colorizeDiffForLogging(patch)
   }
 
-  const jsonifyYamlContentTwo = parseInput(yamlContentTwo)
+  const jsonifyYamlContentTwo = parseInput(yamlWithComments)
   // console.log('jsonifyYamlContentTwo', jsonifyYamlContentTwo.template)
   // process.exit(1)
 
@@ -193,8 +194,8 @@ async function cleanCloudFormation(input, opts = {}) {
   // process.exit(1)
 
   return {
-    yaml: yamlContentTwo.trim(),
-    yamlNoComments: yamlContent.trim(),
+    yaml: yamlWithComments.trim(),
+    yamlNoComments: yamlNoComments.trim(),
     comments: commentsData,
     json: transformedTemplate,
     resourcesByCount,
@@ -213,7 +214,7 @@ async function cleanCloudFormation(input, opts = {}) {
   }
 }
 
-function sortObjectKeys(obj) {
+function sortObjectKeys(obj = {}) {
   return Object.keys(obj).sort().reduce((acc, key) => {
     acc[key] = obj[key]
     return acc

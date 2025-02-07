@@ -10,16 +10,23 @@ function resolveResources(template) {
   }
 
   /* resolve serverless resources */
-  if (template.resources && template.resources.Resources) {
-    return {
-      Resources: filterResourcesObject(template.resources.Resources),
-      path: 'resources.Resources',
-      via: 'serverless'
+  if (template.resources) {
+    if (template.resources.Resources) {
+      return {
+        Resources: filterResourcesObject(template.resources.Resources),
+        path: 'resources.Resources',
+        via: 'serverless'
+      }
+    }
+
+    // TODO Handle array of includes
+    if (Array.isArray(template.resources)) {
+      // throw new Error('Array of includes for serverless not supported yet')
     }
   }
 
   return {
-    Resources: undefined,
+    Resources: {},
   }
 }
 
