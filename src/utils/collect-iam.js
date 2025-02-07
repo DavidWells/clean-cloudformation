@@ -1,6 +1,6 @@
 const { resolveResources, getResourcesEntries } = require('./resolve-resources')
 const  stringifyJson = require('json-stringify-pretty-compact')
-const { getResourceBlock } = require('./yaml-blocks')
+const { getYamlBlock } = require('./yaml-blocks')
 
 function stringifyResource(resource) {
   if (typeof resource === 'string') {
@@ -111,7 +111,7 @@ async function collectIAMResources(template, yamlString) {
           path: path.join('.'),
           type: resourceType,
           resource: obj,
-          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
+          yaml: yamlString ? getYamlBlock(yamlString, logicalId) : null
         })
       }
     }
@@ -130,7 +130,7 @@ async function collectIAMResources(template, yamlString) {
           path: path.join('.'),
           resourceType,
           policy: obj.PolicyDocument,
-          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
+          yaml: yamlString ? getYamlBlock(yamlString, logicalId) : null
         })
       }
 
@@ -141,7 +141,7 @@ async function collectIAMResources(template, yamlString) {
           path: path.join('.'),
           resourceType,
           arns: obj.ManagedPolicyArns,
-          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
+          yaml: yamlString ? getYamlBlock(yamlString, logicalId) : null
         })
       }
 
@@ -152,7 +152,7 @@ async function collectIAMResources(template, yamlString) {
           path: path.join('.'),
           resourceType,
           policy: obj.AssumeRolePolicyDocument,
-          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
+          yaml: yamlString ? getYamlBlock(yamlString, logicalId) : null
         })
       }
 
@@ -163,7 +163,7 @@ async function collectIAMResources(template, yamlString) {
           path: path.join('.'),
           resourceType,
           boundary: obj.PermissionsBoundary,
-          yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
+          yaml: yamlString ? getYamlBlock(yamlString, logicalId) : null
         })
       }
 
@@ -177,7 +177,7 @@ async function collectIAMResources(template, yamlString) {
               resourceType,
               policy: policy.PolicyDocument,
               name: policy.PolicyName,
-              yaml: yamlString ? getResourceBlock(yamlString, logicalId) : null
+              yaml: yamlString ? getYamlBlock(yamlString, logicalId) : null
             })
           }
         })
