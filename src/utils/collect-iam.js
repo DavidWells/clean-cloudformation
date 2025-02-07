@@ -2,6 +2,7 @@ const { resolveResources } = require('./get-resources')
 const  stringifyJson = require('json-stringify-pretty-compact')
 const { getYamlBlock } = require('./get-yaml-block')
 const { generateIAMPrompt } = require('./prompts/iam-security')
+const { getIntrinsicValue } = require('./get-intrinsic')
 
 function stringifyResource(resource) {
   if (typeof resource === 'string') {
@@ -11,31 +12,32 @@ function stringifyResource(resource) {
   // console.log('resource', resource)
 
   // Skip AWS::NoValue refs
-  if (resource.Ref === 'AWS::NoValue' || resource['Ref::Ref'] === 'AWS::NoValue') {
+  const ref = getIntrinsicValue(resource, 'Ref')
+  if (resource.Ref === 'AWS::NoValue' || ref === 'AWS::NoValue') {
+  // if (resource.Ref === 'AWS::NoValue' || resource['Ref::Ref'] === 'AWS::NoValue') {
     return null
   }
   
   // Handle Ref
-  const ref = resource.Ref || resource['Ref::Ref']
   if (ref) {
     return `!Ref ${ref}`
   }
   
   // Handle GetAtt
-  const getAtt = resource['Fn::GetAtt'] || resource['Ref::GetAtt']
+  const getAtt = getIntrinsicValue(resource, 'GetAtt')
   if (getAtt) {
     const attrs = Array.isArray(getAtt) ? getAtt.join('.') : getAtt
     return `!GetAtt ${attrs}`
   }
 
   // Handle Sub
-  const sub = resource['Fn::Sub'] || resource['Ref::Sub']
+  const sub = getIntrinsicValue(resource, 'Sub')
   if (sub) {
     return `!Sub ${sub}`
   }
 
   // Handle Join
-  const join = resource['Fn::Join'] || resource['Ref::Join']
+  const join = getIntrinsicValue(resource, 'Join')
   if (join) {
     return `!Join ${join}`
   }

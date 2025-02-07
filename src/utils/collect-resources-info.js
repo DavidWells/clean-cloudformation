@@ -1,6 +1,8 @@
 const { resolveResources } = require('./get-resources')
 const { generateResourcesPrompt } = require('./prompts/resource-costs')
 const { deepLog } = require('./logger')
+const { getIntrinsicValue } = require('./get-intrinsic')
+
 function getResourcesInfo(template) {
   const resourcesByCount = {}
   let totalResources = 0
@@ -13,20 +15,10 @@ function getResourcesInfo(template) {
       return policy.includes('service-role/AWSLambdaBasicExecutionRole')
     }
     
-    // Handle Fn::Join format
-    /*
-      {
-      'Fn::Join': [ '',
-        [
-          'arn:',
-          [Object],
-          ':iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-        ]
-      ]
-    }
-    */
-    if (policy['Fn::Join']) {
-      const joinParts = policy['Fn::Join'][1]
+    // Handle Join format
+    const joinValue = getIntrinsicValue(policy, 'Join')
+    if (joinValue) {
+      const joinParts = joinValue[1]
       if (Array.isArray(joinParts)) {
         return joinParts.some(part => 
           typeof part === 'string' && part.includes('service-role/AWSLambdaBasicExecutionRole')
@@ -34,16 +26,40 @@ function getResourcesInfo(template) {
       }
     }
 
-    /* Handle Ref::Sub format
-    {
-      'Ref::Sub': 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-    }
-    */
-    if (policy['Ref::Sub']) {
-      return policy['Ref::Sub'].includes('service-role/AWSLambdaBasicExecutionRole')
+    // Handle Sub format
+    const subValue = getIntrinsicValue(policy, 'Sub')
+    if (subValue) {
+      return subValue.includes('service-role/AWSLambdaBasicExecutionRole')
     }
     
     return false
+  }
+
+  function getLambdaFromLogGroupName(logGroupName) {
+    if (typeof logGroupName === 'string') {
+      return logGroupName.startsWith('/aws/lambda/') ? 
+        logGroupName.slice('/aws/lambda/'.length) : 
+        null
+    }
+
+    // Handle Fn::Join format
+    const joinValue = getIntrinsicValue(logGroupName, 'Join')
+    if (joinValue) {
+      const [separator, parts] = joinValue
+      if (parts[0] === '/aws/lambda/') {
+        return parts[1] // Return the lambda function name/reference
+      }
+    }
+
+    // Handle Fn::Sub format
+    const subValue = getIntrinsicValue(logGroupName, 'Sub')
+    if (subValue && typeof subValue === 'string') {
+      return subValue.startsWith('/aws/lambda/') ?
+        subValue.slice('/aws/lambda/'.length) :
+        null
+    }
+
+    return null
   }
 
   const { Resources } = resolveResources(template)
@@ -61,17 +77,14 @@ function getResourcesInfo(template) {
 
   // First pass: collect log groups and Lambda execution roles
   Object.entries(Resources).forEach(([logicalId, resource]) => {
+    console.log('resource', resource)
     // Collect Log Groups
     if (resource.Type === 'AWS::Logs::LogGroup') {
+      const logGroupName = resource.Properties?.LogGroupName
       logGroups.push({
         logicalId,
         resource,
-        // Track which Lambda function this log group might be associated with
-        lambdaFunction: resource.Properties?.LogGroupName?.['Fn::Join']?.[1]?.[0] === '/aws/lambda/' ? 
-          resource.Properties.LogGroupName['Fn::Join'][1][1] : 
-          resource.Properties?.LogGroupName?.startsWith('/aws/lambda/') ?
-            resource.Properties.LogGroupName.slice('/aws/lambda/'.length) :
-            null
+        lambdaFunction: getLambdaFromLogGroupName(logGroupName)
       })
     }
 
@@ -99,9 +112,11 @@ function getResourcesInfo(template) {
     }
   })
 
+  /*
   console.log('logGroups', logGroups)
   console.log('lambdaRoles', lambdaRoles)
   process.exit(1)
+  /** */
 
   // Second pass: count resources and collect Lambda functions
   Object.entries(Resources).forEach(([logicalId, resource]) => {

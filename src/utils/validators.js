@@ -1,6 +1,7 @@
 const Ajv = require('ajv')
 const { loadSchema, schemaCache } = require('./schemas')
 const { resolveResources, getResourcesEntries } = require('./get-resources')
+const { getIntrinsicValue } = require('./get-intrinsic')
 
 // Create AJV instance with schema loading capability
 const ajv = new Ajv({
@@ -278,9 +279,24 @@ function hasIntrinsicFunction(value, path = []) {
   return false
 }
 
+function isMultilineString(value) {
+  if (typeof value === 'string') {
+    return value.includes('\n')
+  }
+
+  // Check for Sub with newlines
+  const subValue = getIntrinsicValue(value, 'Sub')
+  if (subValue && typeof subValue === 'string') {
+    return subValue.includes('\n')
+  }
+
+  return false
+}
+
 module.exports = {
   validateTemplate,
   validateResource,
   validateRequiredProperties,
-  validateNamePattern
+  validateNamePattern,
+  isMultilineString
 } 
