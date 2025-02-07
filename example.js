@@ -32,6 +32,7 @@ async function run() {
     //'./fixtures/inline-function.yml',
     // './fixtures/tiny-two.yml'
     // './fixtures/serverless.yml',
+    // './fixtures/serverless-refs.yml',
     //'./fixtures/stack-one.json',
     './fixtures/stack-one-yaml.yml',
     // './fixtures/stack-two.json',

@@ -1,4 +1,4 @@
-const removeEmptyTopLevelKeys = require('./formatters/remove-empty-top-level-keys')
+const removeEmptyTopLevelKeys = require('./utils/formatters/remove-empty-top-level-keys')
 const {
   removeCDKRootNag,
   removeCDKBootstrapVersionRule,
@@ -7,7 +7,7 @@ const {
   removeCDKResourceMetadata,
   removeCDKTagsFromResources,
   removeCDKMetadataCondition
-} = require('./formatters/cdk')
+} = require('./utils/formatters/cdk')
 
 
 /**
@@ -491,7 +491,5 @@ function sortIAMPolicyProperties(resource) {
 }
 
 module.exports = {
-  removeCDKRootNag,
-  removeCDKResourceMetadata,
   formatTemplate
 } 

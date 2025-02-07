@@ -5,7 +5,7 @@
  * @param {string} [yamlContent='']
  * @return {string}
  */
-function formatYaml(yamlContent = '') {
+function formatYamlString(yamlContent = '') {
   /* Fix array indentation */
   yamlContent = yamlContent.replace(/^(\s+)[^-\s].*:\n\1-\s/gm, '$1$&  ')
 
@@ -112,5 +112,5 @@ function insertBlankLines(content) {
 }
 
 module.exports = {
-  formatYaml
+  formatYamlString
 }

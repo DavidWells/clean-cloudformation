@@ -1,13 +1,12 @@
-const path = require('path')
 const fs = require('fs').promises
 const yaml = require('js-yaml')
 const { loadSchema, loadAllSchemas } = require('./utils/schemas')
 const { validateTemplate } = require('./utils/validators')
-const { formatTemplate } = require('./utils/formatters')
-const { formatYaml } = require('./utils/formatters-yaml')
+const { formatTemplate } = require('./format')
+const { formatYamlString } = require('./utils/formatters/yaml-string')
 const { collectNames } = require('./utils/collect-name-props')
 const { collectIAMResources } = require('./utils/collect-iam')
-const { getResourceCounts } = require('./utils/resource-count')
+const { getResourceCounts } = require('./utils/collect-resources-info')
 const { addSectionHeaders } = require('./utils/yaml-headers')
 const { stringify, parse, extractYamlComments } = require('@davidwells/yaml-utils')
 const { resolveResources, getLogicalIds } = require('./utils/resolve-resources')
@@ -54,17 +53,21 @@ async function cleanCloudFormation(input, opts = {}) {
   process.exit(1)
   /** */
 
-  // Get resource counts and prompts
-  const { resourcesByCount, resourcesPrompt } = getResourceCounts(template);
+
 
   
   /* Process the template object */
   const { randomStrings } = formatTemplate(template)
+
+
+  // Get resource counts and prompts
+  const { resourcesByCount, totalResources, resourcesPrompt } = getResourceCounts(template);
   // console.log('randomStrings', randomStrings)
 
   // First handle random string replacements
   const { Resources, via } = resolveResources(template)
   // console.log('template', template)
+  // process.exit(1)
   // console.log('Resources', Resources)
 
   // console.log('BeforeResources', getLogicalIds(template))
@@ -138,10 +141,10 @@ async function cleanCloudFormation(input, opts = {}) {
     // process.exit(1)
   }
 
-  yamlNoComments = formatYaml(yamlNoComments)
+  yamlNoComments = formatYamlString(yamlNoComments)
   yamlNoComments = addSectionHeaders(yamlNoComments)
 
-  yamlWithComments = formatYaml(yamlWithComments)
+  yamlWithComments = formatYamlString(yamlWithComments)
   yamlWithComments = addSectionHeaders(yamlWithComments)
 
 
@@ -199,6 +202,7 @@ async function cleanCloudFormation(input, opts = {}) {
     comments: commentsData,
     json: transformedTemplate,
     resourcesByCount,
+    totalResources,
     resourcesNamePropertiesFound: foundPropNames,
     prompts: {
       resourceCosts: resourcesPrompt,
