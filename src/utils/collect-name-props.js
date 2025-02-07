@@ -1,6 +1,6 @@
 const { loadSchema } = require('./schemas')
 const { validateNamePattern } = require('./validators')
-const { resolveResources, getResourcesEntries } = require('./resolve-resources')
+const { resolveResources, getResourcesEntries } = require('./get-resources')
 const { generateNamePrompt } = require('./prompts/resource-names')
 
 const ignoreNames = [

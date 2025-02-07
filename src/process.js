@@ -2,7 +2,7 @@ const fs = require('fs').promises
 const path = require('path')
 const yaml = require('js-yaml')
 const { cleanCloudFormation } = require('./')
-const { getCfnSchema } = require('./utils/yaml-schema')
+const { getCfnYamlSchema } = require('./utils/schemas')
 const { deepLog } = require('./utils/logger')
 
 function dumpOriginalAsYaml(fileContents = '') {
@@ -10,7 +10,7 @@ function dumpOriginalAsYaml(fileContents = '') {
     fileContents = JSON.stringify(JSON.parse(fileContents), null, 2)
   }
 
-  const loaded = yaml.load(fileContents, { schema: getCfnSchema() })
+  const loaded = yaml.load(fileContents, { schema: getCfnYamlSchema() })
   // return fileContents
   return yaml.dump(loaded, {
     indent: 2,
@@ -18,7 +18,7 @@ function dumpOriginalAsYaml(fileContents = '') {
     noRefs: true,
     noArrayIndent: true,
     flowStyle: false,
-    schema: getCfnSchema()
+    schema: getCfnYamlSchema()
   })
 }
 

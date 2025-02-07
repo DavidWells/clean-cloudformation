@@ -1,6 +1,6 @@
-const { resolveResources } = require('./resolve-resources')
+const { resolveResources } = require('./get-resources')
 const  stringifyJson = require('json-stringify-pretty-compact')
-const { getYamlBlock } = require('./yaml-blocks')
+const { getYamlBlock } = require('./get-yaml-block')
 const { generateIAMPrompt } = require('./prompts/iam-security')
 
 function stringifyResource(resource) {

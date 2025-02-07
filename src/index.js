@@ -3,16 +3,17 @@ const yaml = require('js-yaml')
 const { loadSchema, loadAllSchemas } = require('./utils/schemas')
 const { validateTemplate } = require('./utils/validators')
 const { formatTemplate } = require('./format')
-const { formatYamlString } = require('./utils/formatters/yaml-string')
+const { formatYamlString } = require('./utils/formatters/clean-yaml-string')
 const { collectNames } = require('./utils/collect-name-props')
 const { collectIAMResources } = require('./utils/collect-iam')
 const { getResourceCounts } = require('./utils/collect-resources-info')
-const { addSectionHeaders } = require('./utils/yaml-headers')
+const { addSectionHeaders } = require('./utils/formatters/add-yaml-headers')
 const { stringify, parse, extractYamlComments } = require('@davidwells/yaml-utils')
-const { resolveResources, getLogicalIds } = require('./utils/resolve-resources')
+const { resolveResources, getLogicalIds } = require('./utils/get-resources')
 const https = require('https')
 const http = require('http')
-const { getCfnSchema, dumpYaml } = require('./utils/yaml-schema')
+const { dumpYaml } = require('./utils/yaml')
+const { getCfnYamlSchema } = require('./utils/schemas')
 const { deepLog } = require('./utils/logger')
 const { createPatch } = require('diff')
 const stripAnsi = require('strip-ansi')  // v6.0.1
@@ -508,7 +509,7 @@ function parseInput(input, options = {}) {
       '$1"$2"'
     )
 
-    const cfnSchema = getCfnSchema()
+    const cfnSchema = getCfnYamlSchema()
     try {
       template = yaml.load(cleanYml, { schema: cfnSchema })
       originalYaml = input // For YAML input, use original string

@@ -1,4 +1,4 @@
-const { resolveResources } = require('./resolve-resources')
+const { resolveResources } = require('./get-resources')
 const { generateResourcesPrompt } = require('./prompts/resource-costs')
 
 function getResourceCounts(template) {

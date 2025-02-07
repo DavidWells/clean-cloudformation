@@ -1,6 +1,6 @@
 const Ajv = require('ajv')
 const { loadSchema, schemaCache } = require('./schemas')
-const { resolveResources, getResourcesEntries } = require('./resolve-resources')
+const { resolveResources, getResourcesEntries } = require('./get-resources')
 
 // Create AJV instance with schema loading capability
 const ajv = new Ajv({

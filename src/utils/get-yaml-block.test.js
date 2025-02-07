@@ -1,6 +1,6 @@
 const { test } = require('uvu')
 const assert = require('uvu/assert')
-const { getYamlBlock } = require('./yaml-blocks')
+const { getYamlBlock } = require('./get-yaml-block')
 
 test('getYamlBlock - extracts simple resource block', () => {
   const yaml = `
@@ -120,7 +120,7 @@ Resources:
   const result1 = getYamlBlock(yaml, 'MyBucket')
   
   // Clear cache
-  const { clearYamlBlockCache } = require('./yaml-blocks')
+  const { clearYamlBlockCache } = require('./get-yaml-block')
   clearYamlBlockCache()
   
   // Second call should recompute

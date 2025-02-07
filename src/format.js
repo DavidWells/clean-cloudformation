@@ -1,4 +1,4 @@
-const removeEmptyTopLevelKeys = require('./utils/formatters/remove-empty-top-level-keys')
+const removeEmptyTopLevelKeys = require('./utils/formatters/clean-empty-object-keys')
 const {
   removeCDKRootNag,
   removeCDKBootstrapVersionRule,
@@ -7,7 +7,7 @@ const {
   removeCDKResourceMetadata,
   removeCDKTagsFromResources,
   removeCDKMetadataCondition
-} = require('./utils/formatters/cdk')
+} = require('./utils/formatters/clean-cdk-object')
 
 
 /**
