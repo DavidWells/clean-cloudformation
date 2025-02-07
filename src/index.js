@@ -15,7 +15,8 @@ const http = require('http')
 const { getCfnSchema, dumpYaml } = require('./utils/yaml-schema')
 const { deepLog } = require('./utils/logger')
 const { createPatch } = require('diff')
-const diff = require('deep-diff')
+const stripAnsi = require('strip-ansi')  // v6.0.1
+const jestDiff = require('jest-diff').diff
 
 async function cleanCloudFormation(input, opts = {}) {
   const _options = opts || {}
@@ -161,23 +162,7 @@ async function cleanCloudFormation(input, opts = {}) {
     )
 
     // Format the diff output
-    diffOutput = patch
-      .split('\n')
-      .slice(2) // Remove the diff header
-      .filter(line => line.trim()) // Remove empty lines
-      .map(line => {
-        if (line.startsWith('+')) {
-          return `\x1b[32m${line}\x1b[0m` // Green for additions
-        }
-        if (line.startsWith('-')) {
-          return `\x1b[31m${line}\x1b[0m` // Red for deletions
-        }
-        if (line.startsWith('@')) {
-          return `\x1b[36m${line}\x1b[0m` // Cyan for chunk headers
-        }
-        return line
-      })
-      .join('\n')
+    diffOutput = colorizeDiffForLogging(patch)
   }
 
   const jsonifyYamlContentTwo = parseInput(yamlContentTwo)
@@ -191,12 +176,12 @@ async function cleanCloudFormation(input, opts = {}) {
   // const diff = prettyDiff(sortedOriginalTemplate.Resources, sortedJsonifyYamlContentTwo.Resources)
 
   const diffJson =  createPatch(
-      'CloudFormation Resources',
-      JSON.stringify(sortObjectKeys(sortedOriginalTemplate.Resources), null, 2),
-      JSON.stringify(sortObjectKeys(sortedJsonifyYamlContentTwo.Resources), null, 2),
-      'Original',
-      'Cleaned'
-    )
+    'CloudFormation Resources',
+    JSON.stringify(sortObjectKeys(sortedOriginalTemplate.Resources), null, 2),
+    JSON.stringify(sortObjectKeys(sortedJsonifyYamlContentTwo.Resources), null, 2),
+    'Original',
+    'Cleaned'
+  )
   // console.log('diff', diff)
   // process.exit(1)
 
@@ -227,8 +212,25 @@ function sortObjectKeys(obj) {
   }, {})
 }
 
-const stripAnsi = require('strip-ansi')  // v6.0.1
-const jestDiff = require('jest-diff').diff
+function colorizeDiffForLogging(diff) {
+  return diff
+    .split('\n')
+    .slice(2) // Remove the diff header
+    .filter(line => line.trim()) // Remove empty lines
+    .map(line => {
+      if (line.startsWith('+')) {
+        return `\x1b[32m${line}\x1b[0m` // Green for additions
+      }
+      if (line.startsWith('-')) {
+        return `\x1b[31m${line}\x1b[0m` // Red for deletions
+      }
+      if (line.startsWith('@')) {
+        return `\x1b[36m${line}\x1b[0m` // Cyan for chunk headers
+      }
+      return line
+    })
+    .join('\n')
+}
 
 function prettyDiff(obj1, obj2) {
   const theDiff = jestDiff(obj1, obj2, {

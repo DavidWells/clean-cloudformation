@@ -133,6 +133,10 @@ async function example(filePathOrObject) {
   // Create or ensure output directory exists
   await fs.mkdir(outputDir, { recursive: true })
 
+  // Create prompts directory
+  const promptsDir = path.join(outputDir, 'prompts')
+  await fs.mkdir(promptsDir, { recursive: true })
+
   const dirtyOutput = dumpOriginalAsYaml(originalContents)
 
   await Promise.all([
@@ -140,6 +144,25 @@ async function example(filePathOrObject) {
     fs.writeFile(`${outputDir}/3_${baseName}-original-as-yaml.yml`, dirtyOutput),
     fs.writeFile(`${outputDir}/1_${baseName}-clean.yml`, yaml),
     fs.writeFile(`${outputDir}/2_${baseName}-clean-comments.yml`, yamlTwo),
+    // Write prompts to files
+    fs.writeFile(
+      path.join(promptsDir, 'resource-costs.md'),
+      `# Resource Costs Prompt
+${prompts.resourceCosts}`
+    ),
+    fs.writeFile(
+      path.join(promptsDir, 'resource-names.md'),
+      `# Resource Names Prompt
+${prompts.resourceNames}`
+    ),
+    // Write prompts as JSON for programmatic use
+    fs.writeFile(
+      path.join(promptsDir, 'prompts.json'),
+      JSON.stringify({
+        resourceCosts: prompts.resourceCosts,
+        resourceNames: prompts.resourceNames
+      }, null, 2)
+    )
   ])
 
   console.log('───────────────────────────────────────────────────')
@@ -217,10 +240,14 @@ example(
   //   url: 'https://raw.githubusercontent.com/aweigold/tachyon/95f8f25ad1bd1729c86aac3276510bd1695306dc/cloudformation-template.json',
   //   name: 'Tachyon'
   // },
+  // {
+  //   url: 'https://raw.githubusercontent.com/JohnMadhan07/EWD-Ass1/f2a5aee6993a4ab0785d7f0158a5f8f46fd77099/cdk.out/AuthAppStack.template.json',
+  //   name: 'AuthAppStack'
+  // },
   {
-    url: 'https://raw.githubusercontent.com/JohnMadhan07/EWD-Ass1/f2a5aee6993a4ab0785d7f0158a5f8f46fd77099/cdk.out/AuthAppStack.template.json',
-    name: 'AuthAppStack'
-  }
+    url: 'https://raw.githubusercontent.com/nguyentrungduc134/Amazon-S3-multipart-API/04a3d4f897aeaebb82bfcc7c6cd884a665ded6e2/cdk.out/MultipartS3UploadStack.template.json',
+    name: 'MultipartS3UploadStack'
+  },
   //'https://raw.githubusercontent.com/kknd4eva/SohWithEventBridge/refs/heads/master/SohWithEventBridge/serverless.yaml',
   //'https://raw.githubusercontent.com/zoph-io/serverless-aws-https-webredirect/6c99fef9218c47f80bacb1236c8f5d964834ef8b/template.yml',
   // './fixtures/broken.yml',
