@@ -53,14 +53,16 @@ async function cleanCloudFormation(input, opts = {}) {
   console.log('earlyDump', earlyDump)
   process.exit(1)
   /** */
+
+  /*
+  const preTransformResourcesInfo = getResourcesInfo(template);
+  console.log('preTransformResourcesInfo', preTransformResourcesInfo)
+  process.exit(1)
+  /** */
   
   /* Process the template object. Mutates the original template object */
   const { randomStrings } = formatTemplateObject(template)
 
-
-  // Get resource counts and prompts
-  const resourcesInfo = getResourcesInfo(template);
-  const { resourcesByCount, totalResources, resourcesPrompt, lambdaFunctions } = resourcesInfo;
   // console.log('randomStrings', randomStrings)
 
   // First handle random string replacements
@@ -105,6 +107,11 @@ async function cleanCloudFormation(input, opts = {}) {
 
   // Transform and sort
   const transformedTemplate = transformIntrinsicFunctions(sortTopLevelKeys(template))
+
+  deepLog('transformedTemplate', template)
+  // Get resource counts and prompts
+  const resourcesInfo = getResourcesInfo(transformedTemplate);
+  const { resourcesByCount, totalResources, resourcesPrompt, lambdaFunctions } = resourcesInfo;
   
   // Validate the transformed template
   const isValid = await validateTemplate(transformedTemplate)
