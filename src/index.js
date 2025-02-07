@@ -193,9 +193,9 @@ async function cleanCloudFormation(input, opts = {}) {
   // process.exit(1)
 
   return {
-    yaml: yamlContent.trim(),
+    yaml: yamlContentTwo.trim(),
+    yamlNoComments: yamlContent.trim(),
     comments: commentsData,
-    yamlTwo: yamlContentTwo.trim(),
     json: transformedTemplate,
     resourcesByCount,
     resourcesNamePropertiesFound: foundPropNames,
