@@ -48,9 +48,9 @@ async function collectIAMResources(template) {
   const managedPolicies = new Set()
   const assumeRolePolicies = new Set()
   const permissionsBoundaries = new Set()
-  const resourcePermissions = new Map() // Map of resource ARN to Set of actions
+  const resourcePermissions = new Map() // Map of resource ARN to { allow: Set, deny: Set }
   
-  function addResourcePermissions(resource, actions) {
+  function addResourcePermissions(resource, actions, effect) {
     if (!resource || !actions) return
     
     // Handle array of resources
@@ -64,10 +64,12 @@ async function collectIAMResources(template) {
       }
       
       if (!resourcePermissions.has(res)) {
-        resourcePermissions.set(res, new Set())
+        resourcePermissions.set(res, { allow: new Set(), deny: new Set() })
       }
+      
+      const permSet = effect === 'Allow' ? 'allow' : 'deny'
       actionsList.forEach(action => {
-        resourcePermissions.get(res).add(action)
+        resourcePermissions.get(res)[permSet].add(action)
       })
     })
   }
@@ -79,19 +81,18 @@ async function collectIAMResources(template) {
       return
     }
 
-    if (statement.Effect !== 'Allow') return
-
+    const effect = statement.Effect || 'Allow' // Default to Allow if not specified
     const actions = statement.Action
     const resources = statement.Resource
     const notResources = statement.NotResource
 
     if (actions && resources) {
-      addResourcePermissions(resources, actions)
+      addResourcePermissions(resources, actions, effect)
     }
     
     // Handle NotResource by noting it specially
     if (actions && notResources) {
-      addResourcePermissions(`NOT(${notResources})`, actions)
+      addResourcePermissions(`NOT(${notResources})`, actions, effect)
     }
   }
 
@@ -193,12 +194,25 @@ async function collectIAMResources(template) {
 
   // Convert permissions map to sorted array and filter out null resources
   const permissionsByResource = Array.from(resourcePermissions.entries())
-    .map(([resource, actions]) => ({
+    .map(([resource, { allow, deny }]) => ({
       resource: stringifyResource(resource),
-      actions: Array.from(actions).sort()
+      allow: Array.from(allow).sort(),
+      deny: Array.from(deny).sort()
     }))
-    .filter(({ resource }) => resource !== null) // Filter out null resources
+    .filter(({ resource }) => resource !== null)
+    // Consolidate duplicate resources
+    .reduce((acc, { resource, allow, deny }) => {
+      const existing = acc.find(item => item.resource === resource)
+      if (existing) {
+        // Merge allow and deny sets
+        existing.allow = [...new Set([...existing.allow, ...allow])].sort()
+        existing.deny = [...new Set([...existing.deny, ...deny])].sort()
+        return acc
+      }
+      return [...acc, { resource, allow, deny }]
+    }, [])
     .sort((a, b) => a.resource.localeCompare(b.resource))
+
   // process.exit(1)
   return {
     iamResources: foundIAMResources.sort((a, b) => a.path.localeCompare(b.path)),
@@ -281,14 +295,33 @@ ${formatJson(boundary)}
 `
   }).join('\n')
 
-  const resourcePermissionsMarkdown = permissionsByResource.map(({ resource, actions }) => {
-    return `Resource: \`${resource}\`
-Allowed Actions:
+  const resourcePermissionsMarkdown = permissionsByResource.map(({ resource, allow, deny }) => {
+    const sections = []
+    
+    if (allow.length > 0) {
+      sections.push(`Allowed Actions:
+
 \`\`\`
-${actions.join('\n')}
+${allow.join('\n')}
+\`\`\``)
+    }
+    
+    if (deny.length > 0) {
+      sections.push(`Denied Actions:
+
 \`\`\`
-`
-  }).join('\n\n')
+${deny.join('\n')}
+\`\`\``)
+    }
+
+    if (sections.length === 0) return ''
+
+    return `### \`${resource}\`
+
+${sections.join('\n\n')}`
+  })
+  .filter(Boolean)
+  .join('\n\n')
 
   return `
 Please review the following IAM resources and policies for security best practices:
@@ -303,15 +336,10 @@ Suggest improvements for:
 6. Following AWS security best practices
 
 ${iamResources.length ? `## IAM Resources:\n\n${iamResourcesMarkdown}` : ''}
-
 ${assumeRolePolicies.length ? `## Trust Relationships (AssumeRolePolicyDocument):\n\n${assumeRolePoliciesMarkdown}` : ''}
-
 ${inlinePolicies.length ? `## Inline Policies:\n\n${inlinePoliciesMarkdown}` : ''}
-
 ${managedPolicies.length ? `## Managed Policies:\n\n${managedPoliciesMarkdown}` : ''}
-
 ${permissionsBoundaries.length ? `## Permissions Boundaries:\n\n${permissionsBoundariesMarkdown}` : ''}
-
 ${permissionsByResource.length ? `## Resource Permissions:\n\n${resourcePermissionsMarkdown}` : ''}`
 }
 

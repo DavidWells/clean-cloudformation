@@ -13,6 +13,7 @@
     "diff": "^7.0.0",
     "jest-diff": "^29.7.0",
     "js-yaml": "^4.1.0",
+    "json-stringify-pretty-compact": "^3.0.0",
     "strip-ansi": "^6.0.1"
   },
   "devDependencies": {
