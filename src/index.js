@@ -2,7 +2,7 @@ const fs = require('fs').promises
 const yaml = require('js-yaml')
 const { loadSchema, loadAllSchemas } = require('./utils/schemas')
 const { validateTemplate } = require('./utils/validators')
-const { formatTemplate } = require('./format')
+const { formatTemplateObject } = require('./format')
 const { formatYamlString } = require('./utils/formatters/clean-yaml-string')
 const { collectNames } = require('./utils/collect-name-props')
 const { collectIAMResources } = require('./utils/collect-iam')
@@ -39,7 +39,7 @@ async function cleanCloudFormation(input, opts = {}) {
   const { template, originalYaml } = parseInput(input, options)
 
   // create a deep clone of the original template here
-  const originalTemplate = JSON.parse(JSON.stringify(template))
+  const originalTemplateClone = JSON.parse(JSON.stringify(template))
 
   if (!template) {
     throw new Error('Template is required')
@@ -53,12 +53,9 @@ async function cleanCloudFormation(input, opts = {}) {
   console.log('earlyDump', earlyDump)
   process.exit(1)
   /** */
-
-
-
   
-  /* Process the template object */
-  const { randomStrings } = formatTemplate(template)
+  /* Process the template object. Mutates the original template object */
+  const { randomStrings } = formatTemplateObject(template)
 
 
   // Get resource counts and prompts
@@ -125,11 +122,12 @@ async function cleanCloudFormation(input, opts = {}) {
     commentData: commentsData,
     lineWidth: -1
   }).trim()
+  /*
+  console.log('yamlWithComments', yamlWithComments)
+  process.exit(1)
+  /** */
 
-  // console.log('yamlWithComments', yamlWithComments)
-  // process.exit(1)
-
-  // Convert to YAML
+  /* Convert the transformed template object to YAML */
   let yamlNoComments
   try {
     yamlNoComments = dumpYaml(transformedTemplate)
@@ -142,14 +140,13 @@ async function cleanCloudFormation(input, opts = {}) {
     // process.exit(1)
   }
 
+  /* Post-process the YAML strings */
   yamlNoComments = formatYamlString(yamlNoComments)
   yamlNoComments = addSectionHeaders(yamlNoComments)
-
   yamlWithComments = formatYamlString(yamlWithComments)
   yamlWithComments = addSectionHeaders(yamlWithComments)
 
-
-  // Collect names before any transformations
+  /* Collect names after any transformations */
   const { foundPropNames, prompt } = await collectNames(template, {
     // returnAll: true
   })
@@ -182,7 +179,7 @@ async function cleanCloudFormation(input, opts = {}) {
   // process.exit(1)
 
   // sort the original template and the JSONifyEMO.content2.template by their object keys alphabetically
-  const sortedOriginalTemplate = sortObjectKeys(originalTemplate)
+  const sortedOriginalTemplate = sortObjectKeys(originalTemplateClone)
   const sortedJsonifyYamlContentTwo = sortObjectKeys(jsonifyYamlContentTwo.template)
 
   // const diff = prettyDiff(sortedOriginalTemplate.Resources, sortedJsonifyYamlContentTwo.Resources)
@@ -198,12 +195,12 @@ async function cleanCloudFormation(input, opts = {}) {
   // process.exit(1)
 
   return {
+    totalResources,
+    json: transformedTemplate,
     yaml: yamlWithComments.trim(),
     yamlNoComments: yamlNoComments.trim(),
     comments: commentsData,
-    json: transformedTemplate,
     resourcesByCount,
-    totalResources,
     resourcesNamePropertiesFound: foundPropNames,
     prompts: {
       resourceCosts: resourcesPrompt,

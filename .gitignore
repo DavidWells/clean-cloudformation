@@ -11,6 +11,8 @@ public/data
 # remote content
 schemas
 outputs
+example.json
+x.js
 
 # testing
 /coverage

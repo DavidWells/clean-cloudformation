@@ -1,4 +1,5 @@
 const { processTemplate } = require('./src/process')
+const fs = require('fs').promises
 
 async function run() {
   const result = await processTemplate(
@@ -48,6 +49,16 @@ async function run() {
 
   console.log(result)
   console.log(Object.keys(result))
+
+  // Write results to example.json
+  await fs.writeFile(
+    'example.json',
+    JSON.stringify(result, null, 2),
+    'utf8'
+  ).catch(err => {
+    console.error('Error writing example.json:', err)
+    process.exit(1)
+  })
 }
 
 run()

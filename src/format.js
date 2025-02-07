@@ -17,7 +17,7 @@ const {
  * @returns {{template: Object, randomStrings: string[]}} The formatted template and array of removed random strings
  * @throws {Error} If template is missing or not an object
  */
-function formatTemplate(template) {
+function formatTemplateObject(template) {
   if (!template) {
     throw new Error('Template is required')
   }
@@ -491,5 +491,5 @@ function sortIAMPolicyProperties(resource) {
 }
 
 module.exports = {
-  formatTemplate
+  formatTemplateObject
 } 
