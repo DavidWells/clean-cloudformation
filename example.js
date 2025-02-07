@@ -155,12 +155,18 @@ ${prompts.resourceCosts}`
       `# Resource Names Prompt
 ${prompts.resourceNames}`
     ),
+    fs.writeFile(
+      path.join(promptsDir, 'iam-security.md'),
+      `# IAM Security Review Prompt
+${prompts.iamSecurity}`
+    ),
     // Write prompts as JSON for programmatic use
     fs.writeFile(
       path.join(promptsDir, 'prompts.json'),
       JSON.stringify({
         resourceCosts: prompts.resourceCosts,
-        resourceNames: prompts.resourceNames
+        resourceNames: prompts.resourceNames,
+        iamSecurity: prompts.iamSecurity
       }, null, 2)
     )
   ])
@@ -244,16 +250,16 @@ example(
   //   url: 'https://raw.githubusercontent.com/JohnMadhan07/EWD-Ass1/f2a5aee6993a4ab0785d7f0158a5f8f46fd77099/cdk.out/AuthAppStack.template.json',
   //   name: 'AuthAppStack'
   // },
-  {
-    url: 'https://raw.githubusercontent.com/nguyentrungduc134/Amazon-S3-multipart-API/04a3d4f897aeaebb82bfcc7c6cd884a665ded6e2/cdk.out/MultipartS3UploadStack.template.json',
-    name: 'MultipartS3UploadStack'
-  },
+  // {
+  //   url: 'https://raw.githubusercontent.com/nguyentrungduc134/Amazon-S3-multipart-API/04a3d4f897aeaebb82bfcc7c6cd884a665ded6e2/cdk.out/MultipartS3UploadStack.template.json',
+  //   name: 'MultipartS3UploadStack'
+  // },
   //'https://raw.githubusercontent.com/kknd4eva/SohWithEventBridge/refs/heads/master/SohWithEventBridge/serverless.yaml',
   //'https://raw.githubusercontent.com/zoph-io/serverless-aws-https-webredirect/6c99fef9218c47f80bacb1236c8f5d964834ef8b/template.yml',
   // './fixtures/broken.yml',
   // './fixtures/tiny-two.yml'
   // './fixtures/serverless.yml',
-  // './fixtures/stack-one.json',
+  './fixtures/stack-one.json',
   //'./fixtures/stack-one-yaml.yml',
   // './fixtures/stack-two.json',
   // './fixtures/stack-two.yml',

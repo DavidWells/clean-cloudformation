@@ -6,6 +6,7 @@ const { validateTemplate } = require('./utils/validators')
 const { formatTemplate } = require('./utils/formatters')
 const { formatYaml } = require('./utils/formatters-yaml')
 const { collectNames } = require('./utils/collect-name-props')
+const { collectIAMResources } = require('./utils/collect-iam')
 const { getResourceCounts } = require('./utils/resource-count')
 const { addSectionHeaders } = require('./utils/yaml-headers')
 const { stringify, parse, extractYamlComments } = require('@davidwells/yaml-utils')
@@ -148,6 +149,9 @@ async function cleanCloudFormation(input, opts = {}) {
     // returnAll: true
   })
 
+  // Collect IAM resources and policies
+  const { iamResources, inlinePolicies, prompt: iamPrompt } = await collectIAMResources(template)
+
   // differ here
   let diffOutput = ''
   let patch = ''
@@ -194,7 +198,8 @@ async function cleanCloudFormation(input, opts = {}) {
     resourcesNamePropertiesFound: foundPropNames,
     prompts: {
       resourceCosts: resourcesPrompt,
-      resourceNames: prompt
+      resourceNames: prompt,
+      iamSecurity: iamPrompt
     },
     originalContents: input,
     diff: {

@@ -1,10 +1,14 @@
+const { resolveResources } = require('./resolve-resources')
+
 function getResourceCounts(template) {
   const resourceTypeCounts = new Map();
   let resourcesPrompt;
   let resourcesByCount;
 
-  if (template.Resources) {
-    for (const [logicalId, resource] of Object.entries(template.Resources)) {
+  const { Resources } = resolveResources(template)
+
+  if (Resources) {
+    for (const [logicalId, resource] of Object.entries(Resources)) {
       if (resource.Type) {
         const count = resourceTypeCounts.get(resource.Type) || 0;
         resourceTypeCounts.set(resource.Type, count + 1);
@@ -37,6 +41,8 @@ If any Fixed Monthly Costs are present, please provide the total monthly cost fo
 If any Variable Costs are present, please provide some scenarios for how much they might cost. When calculating the scenarios, MAKE SURE to use the correct pricing for the resource (for example, $0.20 per 1M requests for Lambda). Also make sure to include the free tier in your calculations of the scenarios. For any resource that can have on demand billing, assume that is billing mode (For example DynamoDB on demand billing is $0.25 per 1M requests).
 
 At the bottom of your response add the total fixed and estimated variable costs in bold.
+
+Highlight high cost impact resources and suggest optimizations and or alternative approaches.
 
 Here are the resources and their counts:
 
