@@ -6,7 +6,7 @@ const { formatTemplateObject } = require('./format')
 const { formatYamlString } = require('./utils/formatters/clean-yaml-string')
 const { collectNames } = require('./utils/collect-name-props')
 const { collectIAMResources } = require('./utils/collect-iam')
-const { getResourceCounts } = require('./utils/collect-resources-info')
+const { getResourcesInfo } = require('./utils/collect-resources-info')
 const { addSectionHeaders } = require('./utils/formatters/add-yaml-headers')
 const { stringify, parse, extractYamlComments } = require('@davidwells/yaml-utils')
 const { resolveResources, getLogicalIds } = require('./utils/get-resources')
@@ -59,7 +59,8 @@ async function cleanCloudFormation(input, opts = {}) {
 
 
   // Get resource counts and prompts
-  const { resourcesByCount, totalResources, resourcesPrompt } = getResourceCounts(template);
+  const resourcesInfo = getResourcesInfo(template);
+  const { resourcesByCount, totalResources, resourcesPrompt, lambdaFunctions } = resourcesInfo;
   // console.log('randomStrings', randomStrings)
 
   // First handle random string replacements
@@ -195,12 +196,11 @@ async function cleanCloudFormation(input, opts = {}) {
   // process.exit(1)
 
   return {
-    totalResources,
     json: transformedTemplate,
     yaml: yamlWithComments.trim(),
     yamlNoComments: yamlNoComments.trim(),
     comments: commentsData,
-    resourcesByCount,
+    resourcesInfo,
     resourcesNamePropertiesFound: foundPropNames,
     prompts: {
       resourceCosts: resourcesPrompt,
@@ -212,7 +212,7 @@ async function cleanCloudFormation(input, opts = {}) {
       log: diffOutput,
       patch: patch,
       diff: diffJson
-    }
+    },
   }
 }
 

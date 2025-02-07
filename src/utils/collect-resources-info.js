@@ -1,9 +1,10 @@
 const { resolveResources } = require('./get-resources')
 const { generateResourcesPrompt } = require('./prompts/resource-costs')
 
-function getResourceCounts(template) {
+function getResourcesInfo(template) {
   const resourcesByCount = {}
   let totalResources = 0
+  const lambdaFunctions = [] // Array to store Lambda function details
 
   const { Resources } = resolveResources(template)
 
@@ -11,11 +12,12 @@ function getResourceCounts(template) {
     return { 
       resourcesByCount,
       totalResources,
-      resourcesPrompt: 'No resources found in template'
+      resourcesPrompt: 'No resources found in template',
+      lambdaFunctions
     }
   }
 
-  // Count resources by type
+  // Count resources by type and collect Lambda functions
   Object.entries(Resources).forEach(([logicalId, resource]) => {
     const type = resource.Type
     if (!resourcesByCount[type]) {
@@ -27,6 +29,14 @@ function getResourceCounts(template) {
     resourcesByCount[type].count++
     resourcesByCount[type].logicalIds.push(logicalId)
     totalResources++
+
+    // Collect Lambda function details
+    if (type === 'AWS::Lambda::Function') {
+      lambdaFunctions.push({
+        logicalId,
+        resource
+      })
+    }
   })
 
   // Sort by count descending
@@ -42,12 +52,13 @@ function getResourceCounts(template) {
   // console.log('resourcesPrompt', sortedResources)
   // process.exit(1)
   return {
-    resourcesByCount: sortedResources,
     totalResources,
-    resourcesPrompt
+    lambdaFunctions: lambdaFunctions.sort((a, b) => a.logicalId.localeCompare(b.logicalId)),
+    resourcesByCount: sortedResources,
+    resourcesPrompt,
   }
 }
 
 module.exports = {
-  getResourceCounts
+  getResourcesInfo
 } 
