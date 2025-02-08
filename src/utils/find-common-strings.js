@@ -1,5 +1,6 @@
 // https://regex101.com/r/rS5Ijq/1
 const NUMBER_IN_FIRST_FOUR_CHARS = /^(?=[A-Z0-9]{8}$)(?=[A-Z0-9]{0,3}[0-9])[A-Z0-9]{8}/
+const debugKey = ''
 
 /**
  * Find common random strings (like hex codes) in a list of IDs
@@ -22,11 +23,7 @@ function findCommonRandomStringsInIds(logicalIds, debug = false) {
     /\d[A-Z0-9]{7}/g,  // Starts with number (03AA31B2)
     /[A-Z][0-9A-Z]{7}/g, // Starts with letter (E5522E5D)
     /[a-f0-9]{12}$/g,   // 12-char lowercase hex
-    // 8 digits
-    /\d{8}/g
-  ];
-
-  const debugKey = 'SendEmailEndPointsendmailPOSTApiPermissionTestPythonStackSendEmailEndPoint74996537POSTsendmail'
+  ]
   
   for (const id of logicalIds) {
 
@@ -45,10 +42,9 @@ function findCommonRandomStringsInIds(logicalIds, debug = false) {
         if (postfix.length === 8) {
           
           // NUMBER_IN_FIRST_FOUR_CHARS OR first 4 chars capital or all digits
-          if (NUMBER_IN_FIRST_FOUR_CHARS.test(postfix) || /^[A-Z]{4}/.test(postfix) || /\d{8}/.test(postfix)) {
+          if (NUMBER_IN_FIRST_FOUR_CHARS.test(postfix) || /^[A-Z]{4}/.test(postfix)) {
             if (id === debugKey) {
               console.log('postfix', postfix, /\d{8}/.test(postfix))
-              // process.exit(0)
             }
             const existing = postfixes.get(postfix) || [0, [], pattern];
             existing[0] += 1;
