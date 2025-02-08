@@ -14,8 +14,8 @@ async function readFixture(name) {
 // Helper to handle snapshots
 async function matchSnapshot(name, content) {
   const snapshotDir = path.join(__dirname, '__snapshots__')
-  const snapshotPath = path.join(snapshotDir, `${name}.snap`)
-
+  const snapshotPath = path.join(snapshotDir, `${name}.yml`)
+  console.log('snapshotPath', snapshotPath)
   // Ensure snapshot directory exists
   await fs.mkdir(snapshotDir, { recursive: true })
 
@@ -28,6 +28,7 @@ async function matchSnapshot(name, content) {
 
   try {
     const existing = await fs.readFile(snapshotPath, 'utf8')
+
     // Add diffing here
     if (content !== existing) {
       // Use jest-diff for better formatting
@@ -41,7 +42,7 @@ async function matchSnapshot(name, content) {
       console.error('\nDiff:')
       console.error(prettyDiff)
       console.log(`Failure in snapshot test "${name}"`)
-      process.exit(1)
+      // process.exit(1)
     }
 
     assert.fixture(content, existing)

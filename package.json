@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "download-schemas": "node scripts/download-cloudformation-schema.js",
-    "validate-schemas": "node scripts/validate-schema.js"
+    "validate-schemas": "node scripts/validate-schema.js",
+    "test": "uvu tests",
+    "test:update": "UPDATE_SNAPSHOTS=true npm test"
   },
   "dependencies": {
     "@davidwells/yaml-utils": "^0.0.6",

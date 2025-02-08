@@ -38,6 +38,35 @@ test('cleanCloudFormation - stack-one.json with replaceLogicalIds', async () => 
   await matchSnapshot('stack-one-with-replace-ids', yaml)
 })
 
+test('cleanCloudFormation - stack-one.yaml with replaceLogicalIds', async () => {
+  const input = await readFixture('stack-one-yaml.yml')
+  const { yaml } = await cleanCloudFormation(input, {
+    asPrompt: true,
+    replaceLogicalIds: [
+      {
+        pattern: 'Passwordless', 
+        replacement: ''
+      },
+      {
+        pattern: /Passwordless$/,
+        replacement: (payload) => {
+          const { logicalId, resourceDetails } = payload
+          const { name } = resourceDetails
+          return logicalId.replace(/Passwordless$/, '') // .replace(name, '')
+        }
+      },
+      {
+        pattern: /Passwordless/gi,
+        replacement: (payload) => {
+          const { logicalId, resourceDetails, pattern } = payload
+          return logicalId.replace(pattern, '')
+        }
+      }
+    ]
+  })
+  await matchSnapshot('stack-one-with-replace-ids-yaml', yaml)
+})
+
 test('cleanCloudFormation - stack-two.json', async () => {
   const input = await readFixture('stack-two.json')
   const { yaml } = await cleanCloudFormation(input)
