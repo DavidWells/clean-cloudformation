@@ -1,0 +1,149 @@
+# ----------------------------------------------------------------------------------
+# --------------------------- CloudFormation Parameters ----------------------------
+# ----------------------------------------------------------------------------------
+Parameters:
+  AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3Bucket7CA07F13:
+    Type: String
+    Description: S3 bucket for asset "dcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cab"
+  AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3VersionKeyACFCB6F9:
+    Type: String
+    Description: S3 key for asset version "dcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cab"
+  AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabArtifactHashD26B5196:
+    Type: String
+    Description: Artifact hash for asset "dcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cab"
+
+# ----------------------------------------------------------------------------------
+# ---------------------------- CloudFormation Resources ----------------------------
+# ----------------------------------------------------------------------------------
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  LambdaRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaRoleDefaultPolicy75625A82
+      Roles:
+        - !Ref LambdaRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+              - logs:*
+            Effect: Allow
+            Resource: "*"
+
+  HandleSendEmail:
+    Type: AWS::Lambda::Function
+    DependsOn: [ LambdaRoleDefaultPolicy, LambdaRole ]
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      Runtime: python3.6
+      Handler: main.handler
+      Code:
+        S3Bucket: !Ref AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3Bucket7CA07F13
+        S3Key:
+          !Join
+            - ""
+            - - !Select
+                  - 0
+                  - !Split
+                      - "||"
+                      - !Ref AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3VersionKeyACFCB6F9
+              - !Select
+                  - 1
+                  - !Split
+                      - "||"
+                      - !Ref AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3VersionKeyACFCB6F9
+
+  SendEmailEndPoint:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: SendEmailEndPoint
+
+  SendEmailEndPointCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+
+  SendEmailEndPointAccount:
+    Type: AWS::ApiGateway::Account
+    DependsOn: [ SendEmailEndPoint ]
+    Properties:
+      CloudWatchRoleArn: !GetAtt SendEmailEndPointCloudWatchRole.Arn
+
+  SendEmailEndPointDeploymentStageprod:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref SendEmailEndPoint
+      DeploymentId: !Ref SendEmailEndPointDeployment
+      StageName: prod
+
+  SendEmailEndPointsendmail:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt SendEmailEndPoint.RootResourceId
+      PathPart: sendmail
+      RestApiId: !Ref SendEmailEndPoint
+
+  SendEmailEndPointsendmailPOSTApiPermissionPythonStackSendEmailEndPoint74996537POSTsendmail:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt HandleSendEmail.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SendEmailEndPoint}/${SendEmailEndPointDeploymentStageprod}/POST/sendmail
+
+  SendEmailEndPointsendmailPOSTApiPermissionTestPythonStackSendEmailEndPoint74996537POSTsendmail:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt HandleSendEmail.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SendEmailEndPoint}/test-invoke-stage/POST/sendmail
+
+  SendEmailEndPointsendmailPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: POST
+      ResourceId: !Ref SendEmailEndPointsendmail
+      RestApiId: !Ref SendEmailEndPoint
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HandleSendEmail.Arn}/invocations
+
+  SendEmailEndPointDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: [ SendEmailEndPointsendmailPOST, SendEmailEndPointsendmail ]
+    Properties:
+      Description: Automatically created by the RestApi construct
+      RestApiId: !Ref SendEmailEndPoint
+
+# ----------------------------------------------------------------------------------
+# ----------------------------- CloudFormation Outputs -----------------------------
+# ----------------------------------------------------------------------------------
+Outputs:
+  SendEmailEndPointEndpointE6D1DD47:
+    Value: !Sub https://${SendEmailEndPoint}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${SendEmailEndPointDeploymentStageprod}/
+  Sendemailendpoint:
+    Value: !Sub https://${SendEmailEndPoint}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${SendEmailEndPointDeploymentStageprod}/sendmail
