@@ -1,0 +1,1581 @@
+# ----------------------------------------------------------------------------------
+# ---------------------------- CloudFormation Mappings -----------------------------
+# ----------------------------------------------------------------------------------
+Mappings:
+  LatestNodeRuntimeMap:
+    af-south-1:
+      value: nodejs20.x
+    ap-east-1:
+      value: nodejs20.x
+    ap-northeast-1:
+      value: nodejs20.x
+    ap-northeast-2:
+      value: nodejs20.x
+    ap-northeast-3:
+      value: nodejs20.x
+    ap-south-1:
+      value: nodejs20.x
+    ap-south-2:
+      value: nodejs20.x
+    ap-southeast-1:
+      value: nodejs20.x
+    ap-southeast-2:
+      value: nodejs20.x
+    ap-southeast-3:
+      value: nodejs20.x
+    ap-southeast-4:
+      value: nodejs20.x
+    ca-central-1:
+      value: nodejs20.x
+    cn-north-1:
+      value: nodejs18.x
+    cn-northwest-1:
+      value: nodejs18.x
+    eu-central-1:
+      value: nodejs20.x
+    eu-central-2:
+      value: nodejs20.x
+    eu-north-1:
+      value: nodejs20.x
+    eu-south-1:
+      value: nodejs20.x
+    eu-south-2:
+      value: nodejs20.x
+    eu-west-1:
+      value: nodejs20.x
+    eu-west-2:
+      value: nodejs20.x
+    eu-west-3:
+      value: nodejs20.x
+    il-central-1:
+      value: nodejs20.x
+    me-central-1:
+      value: nodejs20.x
+    me-south-1:
+      value: nodejs20.x
+    sa-east-1:
+      value: nodejs20.x
+    us-east-1:
+      value: nodejs20.x
+    us-east-2:
+      value: nodejs20.x
+    us-west-1:
+      value: nodejs20.x
+    us-west-2:
+      value: nodejs20.x
+
+# ----------------------------------------------------------------------------------
+# ---------------------------- CloudFormation Resources ----------------------------
+# ----------------------------------------------------------------------------------
+Resources:
+  ApiGatewayAccountSetting:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchLogsRole.Arn
+
+  ExampleSpaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  ExampleSpaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ExampleSpaBucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:DeleteObject*
+              - s3:GetBucket*
+              - s3:List*
+              - s3:PutBucketPolicy
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt CustomS3AutoDeleteObjectsCustomResourceProviderRole.Arn
+            Resource:
+              - !GetAtt ExampleSpaBucket.Arn
+              - !Sub ${ExampleSpaBucket.Arn}/*
+          - Action: s3:*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+            Effect: Deny
+            Principal:
+              AWS: "*"
+            Resource:
+              - !GetAtt ExampleSpaBucket.Arn
+              - !Sub ${ExampleSpaBucket.Arn}/*
+            Sid: EnforceTLS
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt ExampleSpaOAI.S3CanonicalUserId
+            Resource: !Sub ${ExampleSpaBucket.Arn}/*
+        Version: "2012-10-17"
+
+  ExampleSpaBucketAutoDeleteObjectsCustomResource:
+    Type: Custom::S3AutoDeleteObjects
+    DependsOn: [ ExampleSpaBucketPolicy ]
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      ServiceToken: !GetAtt CustomS3AutoDeleteObjectsCustomResourceProviderHandler.Arn
+      BucketName: !Ref ExampleSpaBucket
+
+  CustomS3AutoDeleteObjectsCustomResourceProviderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  CustomS3AutoDeleteObjectsCustomResourceProviderHandler:
+    Type: AWS::Lambda::Function
+    DependsOn: [ CustomS3AutoDeleteObjectsCustomResourceProviderRole ]
+    Properties:
+      Description: !Sub Lambda function for auto-deleting objects in ${ExampleSpaBucket} S3 bucket.
+      Role: !GetAtt CustomS3AutoDeleteObjectsCustomResourceProviderRole.Arn
+      Runtime:
+        !FindInMap
+          - LatestNodeRuntimeMap
+          - !Ref AWS::Region
+          - value
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 900
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip
+
+  ExampleSpaOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: Allows CloudFront to reach the bucket
+
+  HeadersExampleSpa:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: passwordlessexampleHeadersExampleSpa61D926C3
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: default-src 'self'; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com https://*.amazoncognito.com; img-src *;
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: same-origin
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+            Preload: true
+          XSSProtection:
+            ModeBlock: true
+            Override: true
+            Protection: true
+
+  ExampleSpaDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 403
+            ResponsePagePath: /index.html
+        DefaultCacheBehavior:
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          Compress: true
+          ResponseHeadersPolicyId: !Ref HeadersExampleSpa
+          TargetOriginId: passwordlessexampleExampleSpaDistributionOrigin18A2DFAE7
+          ViewerProtocolPolicy: redirect-to-https
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt ExampleSpaBucket.RegionalDomainName
+            Id: passwordlessexampleExampleSpaDistributionOrigin18A2DFAE7
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${ExampleSpaOAI}
+
+  ApiGatewayCloudWatchLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+
+  ReqValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: req-validator
+      RestApiId: !Ref RestApi
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+
+  Fido2ApiWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Action:
+            Block: {}
+          Name: RateLimitPerIP
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              AggregateKeyType: FORWARDED_IP
+              ForwardedIPConfig:
+                FallbackBehavior: MATCH
+                HeaderName: X-Forwarded-For
+              Limit: 100
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitPerIP
+            SampledRequestsEnabled: true
+      Scope: REGIONAL
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: Fido2ApiWebACLPasswordless
+        SampledRequestsEnabled: true
+
+  WafAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/${RestApi}/stages/${RestApiDeploymentStagev1}
+      WebACLArn: !GetAtt Fido2ApiWebACL.Arn
+
+  SecretsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: userNameHash
+          AttributeType: B
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: userNameHash
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: exp
+        Enabled: true
+
+  Fido2AuthenticatorsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: credentialId
+          AttributeType: B
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: credentialId
+          KeySchema:
+            - AttributeName: credentialId
+              KeyType: HASH
+          Projection:
+            ProjectionType: KEYS_ONLY
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: exp
+        Enabled: true
+
+  UserPoolDefineAuthChallengeCognito:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt DefineAuthChallenge.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserPoolCreateAuthChallengeCognito:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt CreateAuthChallenge.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserPoolVerifyAuthChallengeResponseCognito:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt VerifyAuthChallengeResponse.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserPoolPreSignUpCognito:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreSignup.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserPoolPreTokenGenerationCognito:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PreToken.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_phone_number
+            Priority: 1
+          - Name: verified_email
+            Priority: 2
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AutoVerifiedAttributes:
+        - email
+      EmailVerificationMessage: The verification code to your new account is {####}
+      EmailVerificationSubject: Verify your new account
+      LambdaConfig:
+        CreateAuthChallenge: !GetAtt CreateAuthChallenge.Arn
+        DefineAuthChallenge: !GetAtt DefineAuthChallenge.Arn
+        PreSignUp: !GetAtt PreSignup.Arn
+        PreTokenGeneration: !GetAtt PreToken.Arn
+        VerifyAuthChallengeResponse: !GetAtt VerifyAuthChallengeResponse.Arn
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      SmsVerificationMessage: The verification code to your new account is {####}
+      UsernameAttributes:
+        - email
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailMessage: The verification code to your new account is {####}
+        EmailSubject: Verify your new account
+        SmsMessage: The verification code to your new account is {####}
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: passwordlessexampleCognitoAuthorizerPasswordless6856220B
+      AuthorizerResultTtlInSeconds: 60
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !GetAtt UserPool.Arn
+      RestApiId: !Ref RestApi
+      Type: COGNITO_USER_POOLS
+
+  CompleteRegistrationModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      Name: registerAuthenticatorComplete
+      Description: Create FIDO2 credential request body
+      ContentType: application/json
+      RestApiId: !Ref RestApi
+      Schema:
+        type: object
+        required:
+          - clientDataJSON_B64
+          - attestationObjectB64
+          - friendlyName
+        properties:
+          clientDataJSON_B64:
+            type: string
+            minLength: 1
+          attestationObjectB64:
+            type: string
+            minLength: 1
+          friendlyName:
+            type: string
+            minLength: 1
+            maxLength: 256
+          transports:
+            type: array
+            items:
+              type: string
+              enum:
+                - usb
+                - nfc
+                - ble
+                - internal
+                - hybrid
+        $schema: http://json-schema.org/draft-04/schema#
+
+  DeleteCredentialModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      Name: credentialDelete
+      Description: Delete FIDO2 credential request body
+      ContentType: application/json
+      RestApiId: !Ref RestApi
+      Schema:
+        type: object
+        required:
+          - credentialId
+        properties:
+          credentialId:
+            type: string
+            minLength: 1
+        $schema: http://json-schema.org/draft-04/schema#
+
+  UpdateCredentialModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      Name: credentialUpdate
+      Description: Update FIDO2 credential request body
+      ContentType: application/json
+      RestApiId: !Ref RestApi
+      Schema:
+        type: object
+        required:
+          - credentialId
+          - friendlyName
+        properties:
+          credentialId:
+            type: string
+            minLength: 1
+          friendlyName:
+            type: string
+            minLength: 1
+            maxLength: 256
+        $schema: http://json-schema.org/draft-04/schema#
+
+  KmsKeyRsa:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      KeyPolicy:
+        Statement:
+          - NotAction: kms:Sign
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Resource: "*"
+          - Action: kms:Sign
+            Condition:
+              StringLike:
+                kms:RequestAlias: alias/Passwordless-passwordless-example
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt CreateAuthChallengeServiceRole.Arn
+            Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
+        Version: "2012-10-17"
+      KeySpec: RSA_2048
+      KeyUsage: SIGN_VERIFY
+
+  PreSignup:
+    Type: AWS::Lambda::Function
+    DependsOn: [ PreSignupServiceRole ]
+    Properties:
+      Role: !GetAtt PreSignupServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: df1fb09f294aeaa07cb8eff505a53504681e262429c42a5f6b1bdf03f5f778f8.zip
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+
+  CreateAuthChallenge:
+    Type: AWS::Lambda::Function
+    DependsOn: [ CreateAuthChallengeServiceRoleDefaultPolicy, CreateAuthChallengeServiceRole ]
+    Properties:
+      Role: !GetAtt CreateAuthChallengeServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Timeout: 5
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: 3626f522fe8e0b63e39bfac06393edcf6b922d39e8ab7644b845f60fc54430b2.zip
+      Environment:
+        Variables:
+          ALLOWED_ORIGINS: !Sub http://localhost:5173,https://${ExampleSpaDistribution.DomainName}
+          ALLOWED_APPLICATION_ORIGINS: ""
+          LOG_LEVEL: DEBUG
+          MAGIC_LINK_ENABLED: "TRUE"
+          SES_FROM_ADDRESS: davidgregorywells@gmail.com
+          SES_REGION: ""
+          KMS_KEY_ID: !Ref KmsKeyRsaAlias
+          DYNAMODB_SECRETS_TABLE: !Ref SecretsTable
+          SECONDS_UNTIL_EXPIRY: "900"
+          MIN_SECONDS_BETWEEN: "60"
+          STACK_ID: !Ref AWS::StackId
+          FIDO2_ENABLED: "TRUE"
+          DYNAMODB_AUTHENTICATORS_TABLE: !Ref Fido2AuthenticatorsTable
+          USER_VERIFICATION: required
+          EXPOSE_USER_CREDENTIAL_IDS: "TRUE"
+          SIGN_IN_TIMEOUT: "120000"
+          SMS_OTP_STEP_UP_ENABLED: "TRUE"
+          OTP_LENGTH: ""
+          ORIGINATION_NUMBER: ""
+          SENDER_ID: ""
+          SNS_REGION: ""
+
+  VerifyAuthChallengeResponse:
+    Type: AWS::Lambda::Function
+    DependsOn: [ VerifyAuthChallengeResponseServiceRoleDefaultPolicy, VerifyAuthChallengeResponseServiceRole ]
+    Properties:
+      Role: !GetAtt VerifyAuthChallengeResponseServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Timeout: 5
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: d32590f8bc359eb518cfc0e943f3ada6ff0a44de4a00cdd22a32c61eaeb7a0eb.zip
+      Environment:
+        Variables:
+          ALLOWED_ORIGINS: !Sub http://localhost:5173,https://${ExampleSpaDistribution.DomainName}
+          ALLOWED_APPLICATION_ORIGINS: ""
+          LOG_LEVEL: DEBUG
+          MAGIC_LINK_ENABLED: "TRUE"
+          DYNAMODB_SECRETS_TABLE: !Ref SecretsTable
+          STACK_ID: !Ref AWS::StackId
+          FIDO2_ENABLED: "TRUE"
+          DYNAMODB_AUTHENTICATORS_TABLE: !Ref Fido2AuthenticatorsTable
+          ALLOWED_RELYING_PARTY_IDS: !Sub localhost,${ExampleSpaDistribution.DomainName}
+          ENFORCE_FIDO2_IF_AVAILABLE: ""
+          USER_VERIFICATION: required
+          SMS_OTP_STEP_UP_ENABLED: "TRUE"
+
+  DefineAuthChallenge:
+    Type: AWS::Lambda::Function
+    DependsOn: [ DefineAuthChallengeServiceRole ]
+    Properties:
+      Role: !GetAtt DefineAuthChallengeServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Timeout: 5
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: 1c2903a7d441ebeec7e5e4355db1144ee52f6fcc0a4ab388c4fd07b373ec876d.zip
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+
+  PreToken:
+    Type: AWS::Lambda::Function
+    DependsOn: [ PreTokenServiceRole ]
+    Properties:
+      Role: !GetAtt PreTokenServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: 4afc0f7fb079db5398a79a7fc61d813411335338c4b0a4375d33681f3bfcf53c.zip
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+          CLIENT_METADATA_PERSISTED_KEYS: signInMethod,consent_id
+
+  Fido2Notification:
+    Type: AWS::Lambda::Function
+    DependsOn: [ Fido2NotificationServiceRoleDefaultPolicy, Fido2NotificationServiceRole ]
+    Properties:
+      Role: !GetAtt Fido2NotificationServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Timeout: 30
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: e7fe3b1c0421a478b6a790df226b6914ed5a46f6836ba451939e71966f43a7ed.zip
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+          SES_FROM_ADDRESS: davidgregorywells@gmail.com
+          SES_REGION: ""
+          USER_POOL_ID: !Ref UserPool
+
+  Fido2:
+    Type: AWS::Lambda::Function
+    DependsOn: [ Fido2ServiceRoleDefaultPolicy, Fido2ServiceRole ]
+    Properties:
+      Role: !GetAtt Fido2ServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Timeout: 30
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: f82db5a2540b3639e6e0f9d0a3cadf859858a250fecc260584e42515ec032df6.zip
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+          DYNAMODB_AUTHENTICATORS_TABLE: !Ref Fido2AuthenticatorsTable
+          COGNITO_USER_POOL_ID: !Ref UserPool
+          RELYING_PARTY_NAME: Passwordless Fido2 Example
+          ALLOWED_RELYING_PARTY_IDS: !Sub localhost,${ExampleSpaDistribution.DomainName}
+          ALLOWED_ORIGINS: !Sub http://localhost:5173,https://${ExampleSpaDistribution.DomainName}
+          ALLOWED_APPLICATION_ORIGINS: ""
+          ATTESTATION: none
+          USER_VERIFICATION: required
+          AUTHENTICATOR_ATTACHMENT: ""
+          REQUIRE_RESIDENT_KEY: ""
+          AUTHENTICATOR_REGISTRATION_TIMEOUT: "300000"
+          CORS_ALLOWED_ORIGINS: !Sub http://localhost:5173,https://${ExampleSpaDistribution.DomainName}
+          CORS_ALLOWED_HEADERS: Content-Type,Authorization
+          CORS_ALLOWED_METHODS: POST
+          CORS_MAX_AGE: "86400"
+          FIDO2_NOTIFICATION_LAMBDA_ARN: !Sub ${Fido2Notification.Arn}:$LATEST
+
+  Fido2Challenge:
+    Type: AWS::Lambda::Function
+    DependsOn: [ Fido2ChallengeServiceRoleDefaultPolicy, Fido2ChallengeServiceRole ]
+    Properties:
+      Role: !GetAtt Fido2ChallengeServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      Timeout: 30
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: 6e2b3ff3517cb2b0b1d94a135ebac93927f6d3aead57cb9587d869774db5e2c8.zip
+      Environment:
+        Variables:
+          LOG_LEVEL: DEBUG
+          DYNAMODB_AUTHENTICATORS_TABLE: !Ref Fido2AuthenticatorsTable
+          SIGN_IN_TIMEOUT: "120000"
+          USER_VERIFICATION: required
+          CORS_ALLOWED_ORIGINS: !Sub http://localhost:5173,https://${ExampleSpaDistribution.DomainName}
+          CORS_ALLOWED_HEADERS: Content-Type
+          CORS_ALLOWED_METHODS: POST
+          CORS_MAX_AGE: "86400"
+
+  ApigwAccessLogs:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Name: RestApiPasswordless
+
+  UserPoolUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      AccessTokenValidity: 5
+      AllowedOAuthFlows:
+        - implicit
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - profile
+        - phone
+        - email
+        - openid
+        - aws.cognito.signin.user.admin
+      CallbackURLs:
+        - https://example.com
+      ExplicitAuthFlows:
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      IdTokenValidity: 5
+      PreventUserExistenceErrors: LEGACY
+      RefreshTokenValidity: 60
+      SupportedIdentityProviders:
+        - COGNITO
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: minutes
+      UserPoolId: !Ref UserPool
+
+  KmsKeyRsaAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/Passwordless-passwordless-example
+      TargetKeyId: !GetAtt KmsKeyRsa.Arn
+
+  PreSignupServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  CreateAuthChallengeServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  CreateAuthChallengeServiceRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PasswordlessCreateAuthChallengePasswordlessServiceRoleDefaultPolicy92772054
+      Roles:
+        - !Ref CreateAuthChallengeServiceRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+              - dynamodb:ConditionCheckItem
+              - dynamodb:DeleteItem
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:GetRecords
+              - dynamodb:GetShardIterator
+              - dynamodb:PutItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:UpdateItem
+            Effect: Allow
+            Resource:
+              - !GetAtt SecretsTable.Arn
+              - !Ref AWS::NoValue
+          - Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:ConditionCheckItem
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:GetRecords
+              - dynamodb:GetShardIterator
+              - dynamodb:Query
+              - dynamodb:Scan
+            Effect: Allow
+            Resource:
+              - !GetAtt Fido2AuthenticatorsTable.Arn
+              - !Sub ${Fido2AuthenticatorsTable.Arn}/index/*
+          - Action: ses:SendEmail
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/*
+          - Action: SNS:Publish
+            Effect: Allow
+            NotResource: arn:aws:sns:*:*:*
+          - Action: kms:Sign
+            Condition:
+              StringLike:
+                kms:RequestAlias: alias/Passwordless-passwordless-example
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
+
+  VerifyAuthChallengeResponseServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  VerifyAuthChallengeResponseServiceRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRoleDefaultPolicy7E3C4546
+      Roles:
+        - !Ref VerifyAuthChallengeResponseServiceRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+              - dynamodb:ConditionCheckItem
+              - dynamodb:DeleteItem
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:GetRecords
+              - dynamodb:GetShardIterator
+              - dynamodb:PutItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:UpdateItem
+            Effect: Allow
+            Resource:
+              - !GetAtt Fido2AuthenticatorsTable.Arn
+              - !GetAtt SecretsTable.Arn
+              - !Sub ${Fido2AuthenticatorsTable.Arn}/index/*
+              - !Ref AWS::NoValue
+          - Action: kms:GetPublicKey
+            Condition:
+              StringLike:
+                kms:RequestAlias: !Ref KmsKeyRsaAlias
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
+
+  DefineAuthChallengeServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  PreTokenServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  Fido2NotificationServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  Fido2NotificationServiceRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PasswordlessFido2NotificationPasswordlessServiceRoleDefaultPolicyCB205E19
+      Roles:
+        - !Ref Fido2NotificationServiceRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: ses:SendEmail
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/*
+          - Action: cognito-idp:AdminGetUser
+            Effect: Allow
+            Resource: !GetAtt UserPool.Arn
+
+  Fido2ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  Fido2ServiceRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PasswordlessFido2PasswordlessServiceRoleDefaultPolicyF00F9808
+      Roles:
+        - !Ref Fido2ServiceRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: lambda:InvokeFunction
+            Effect: Allow
+            Resource: !Sub ${Fido2Notification.Arn}:$LATEST
+          - Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+              - dynamodb:ConditionCheckItem
+              - dynamodb:DeleteItem
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:GetRecords
+              - dynamodb:GetShardIterator
+              - dynamodb:PutItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:UpdateItem
+            Effect: Allow
+            Resource:
+              - !GetAtt Fido2AuthenticatorsTable.Arn
+              - !Sub ${Fido2AuthenticatorsTable.Arn}/index/*
+
+  Fido2ChallengeServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  Fido2ChallengeServiceRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PasswordlessFido2ChallengePasswordlessServiceRoleDefaultPolicyF79C351B
+      Roles:
+        - !Ref Fido2ChallengeServiceRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: dynamodb:PutItem
+            Condition:
+              ForAllValues:StringEquals:
+                dynamodb:Attributes:
+                  - pk
+                  - sk
+                  - exp
+            Effect: Allow
+            Resource: !GetAtt Fido2AuthenticatorsTable.Arn
+
+  RestApiDeploymentStagev1:
+    Type: AWS::ApiGateway::Stage
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApigwAccessLogs.Arn
+        Format: '{"requestId":"$context.requestId","jwtSub":"$context.authorizer.claims.sub","jwtIat":"$context.authorizer.claims.iat","jwtEventId":"$context.authorizer.claims.event_id","jwtJti":"$context.authorizer.claims.jti","jwtOriginJti":"$context.authorizer.claims.origin_jti","jwtSignInMethod":"$context.authorizer.claims.sign_in_method","userAgent":"$context.identity.userAgent","sourceIp":"$context.identity.sourceIp","requestTime":"$context.requestTime","requestTimeEpoch":"$context.requestTimeEpoch","httpMethod":"$context.httpMethod","path":"$context.path","status":"$context.status","authorizerError":"$context.authorizer.error","apiError":"$context.error.message","protocol":"$context.protocol","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","domainName":"$context.domainName"}'
+      DeploymentId: !Ref RestApiDeployment
+      MethodSettings:
+        - DataTraceEnabled: false
+          HttpMethod: "*"
+          LoggingLevel: ERROR
+          MetricsEnabled: true
+          ResourcePath: /*
+          ThrottlingBurstLimit: 1000
+          ThrottlingRateLimit: 2000
+      RestApiId: !Ref RestApi
+      StageName: v1
+
+  RestApiregisterauthenticator:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: register-authenticator
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorstart:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !Ref RestApiregisterauthenticator
+      PathPart: start
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorstartOPTIONS:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Vary: "'Origin'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Max-Age: "'86400'"
+            ResponseTemplates:
+              application/json: !Sub |-
+                  #set($origin = $input.params().header.get("Origin"))
+                  #if($origin == "")
+                    #set($origin = $input.params().header.get("origin"))
+                  #end
+                  #if($origin == "https://${ExampleSpaDistribution.DomainName}")
+                    #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)
+                  #end
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Vary: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
+          StatusCode: "204"
+      ResourceId: !Ref RestApiregisterauthenticatorstart
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorstartPOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Fido2.Arn}/invocations
+      RequestParameters:
+        method.request.querystring.rpId: true
+      RequestValidatorId: !Ref ReqValidator
+      ResourceId: !Ref RestApiregisterauthenticatorstart
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorcomplete:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !Ref RestApiregisterauthenticator
+      PathPart: complete
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorcompleteOPTIONS:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Vary: "'Origin'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Max-Age: "'86400'"
+            ResponseTemplates:
+              application/json: !Sub |-
+                  #set($origin = $input.params().header.get("Origin"))
+                  #if($origin == "")
+                    #set($origin = $input.params().header.get("origin"))
+                  #end
+                  #if($origin == "https://${ExampleSpaDistribution.DomainName}")
+                    #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)
+                  #end
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Vary: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
+          StatusCode: "204"
+      ResourceId: !Ref RestApiregisterauthenticatorcomplete
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorcompletePOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Fido2.Arn}/invocations
+      RequestModels:
+        application/json: !Ref CompleteRegistrationModel
+      RequestValidatorId: !Ref ReqValidator
+      ResourceId: !Ref RestApiregisterauthenticatorcomplete
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticators:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: authenticators
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorslist:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !Ref RestApiauthenticators
+      PathPart: list
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorslistOPTIONS:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Vary: "'Origin'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Max-Age: "'86400'"
+            ResponseTemplates:
+              application/json: !Sub |-
+                  #set($origin = $input.params().header.get("Origin"))
+                  #if($origin == "")
+                    #set($origin = $input.params().header.get("origin"))
+                  #end
+                  #if($origin == "https://${ExampleSpaDistribution.DomainName}")
+                    #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)
+                  #end
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Vary: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
+          StatusCode: "204"
+      ResourceId: !Ref RestApiauthenticatorslist
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorslistPOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Fido2.Arn}/invocations
+      RequestParameters:
+        method.request.querystring.rpId: true
+      RequestValidatorId: !Ref ReqValidator
+      ResourceId: !Ref RestApiauthenticatorslist
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorsdelete:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !Ref RestApiauthenticators
+      PathPart: delete
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorsdeleteOPTIONS:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Vary: "'Origin'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Max-Age: "'86400'"
+            ResponseTemplates:
+              application/json: !Sub |-
+                  #set($origin = $input.params().header.get("Origin"))
+                  #if($origin == "")
+                    #set($origin = $input.params().header.get("origin"))
+                  #end
+                  #if($origin == "https://${ExampleSpaDistribution.DomainName}")
+                    #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)
+                  #end
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Vary: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
+          StatusCode: "204"
+      ResourceId: !Ref RestApiauthenticatorsdelete
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorsdeletePOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Fido2.Arn}/invocations
+      RequestModels:
+        application/json: !Ref DeleteCredentialModel
+      RequestValidatorId: !Ref ReqValidator
+      ResourceId: !Ref RestApiauthenticatorsdelete
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorsupdate:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !Ref RestApiauthenticators
+      PathPart: update
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorsupdateOPTIONS:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Vary: "'Origin'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Max-Age: "'86400'"
+            ResponseTemplates:
+              application/json: !Sub |-
+                  #set($origin = $input.params().header.get("Origin"))
+                  #if($origin == "")
+                    #set($origin = $input.params().header.get("origin"))
+                  #end
+                  #if($origin == "https://${ExampleSpaDistribution.DomainName}")
+                    #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)
+                  #end
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Vary: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
+          StatusCode: "204"
+      ResourceId: !Ref RestApiauthenticatorsupdate
+      RestApiId: !Ref RestApi
+
+  RestApiauthenticatorsupdatePOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Fido2.Arn}/invocations
+      RequestModels:
+        application/json: !Ref UpdateCredentialModel
+      RequestValidatorId: !Ref ReqValidator
+      ResourceId: !Ref RestApiauthenticatorsupdate
+      RestApiId: !Ref RestApi
+
+  RestApisigninchallenge:
+    Type: AWS::ApiGateway::Resource
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: sign-in-challenge
+      RestApiId: !Ref RestApi
+
+  RestApisigninchallengeOPTIONS:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
+              method.response.header.Access-Control-Allow-Origin: "'http://localhost:5173'"
+              method.response.header.Vary: "'Origin'"
+              method.response.header.Access-Control-Allow-Methods: "'POST'"
+              method.response.header.Access-Control-Max-Age: "'86400'"
+            ResponseTemplates:
+              application/json: !Sub |-
+                  #set($origin = $input.params().header.get("Origin"))
+                  #if($origin == "")
+                    #set($origin = $input.params().header.get("origin"))
+                  #end
+                  #if($origin == "https://${ExampleSpaDistribution.DomainName}")
+                    #set($context.responseOverride.header.Access-Control-Allow-Origin = $origin)
+                  #end
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Vary: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Max-Age: true
+          StatusCode: "204"
+      ResourceId: !Ref RestApisigninchallenge
+      RestApiId: !Ref RestApi
+
+  RestApisigninchallengePOST:
+    Type: AWS::ApiGateway::Method
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Fido2Challenge.Arn}/invocations
+      ResourceId: !Ref RestApisigninchallenge
+      RestApiId: !Ref RestApi
+
+  RestApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayAccountSetting
+      - CompleteRegistrationModel
+      - DeleteCredentialModel
+      - RestApiauthenticatorsdeleteOPTIONS
+      - RestApiauthenticatorsdeletePOST
+      - RestApiauthenticatorsdelete
+      - RestApiauthenticatorslistOPTIONS
+      - RestApiauthenticatorslistPOST
+      - RestApiauthenticatorslist
+      - RestApiauthenticators
+      - RestApiauthenticatorsupdateOPTIONS
+      - RestApiauthenticatorsupdatePOST
+      - RestApiauthenticatorsupdate
+      - RestApiregisterauthenticatorcompleteOPTIONS
+      - RestApiregisterauthenticatorcompletePOST
+      - RestApiregisterauthenticatorcomplete
+      - RestApiregisterauthenticator
+      - RestApiregisterauthenticatorstartOPTIONS
+      - RestApiregisterauthenticatorstartPOST
+      - RestApiregisterauthenticatorstart
+      - RestApisigninchallengeOPTIONS
+      - RestApisigninchallengePOST
+      - RestApisigninchallenge
+      - ReqValidator
+      - UpdateCredentialModel
+    Properties:
+      Description: Automatically created by the RestApi construct
+      RestApiId: !Ref RestApi
+
+  RestApiregisterauthenticatorstartPOSTApiPermissionexampleRestApiPOSTregisterauthenticatorstart:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiDeploymentStagev1}/POST/register-authenticator/start
+
+  RestApiregisterauthenticatorstartPOSTApiPermissionTestexampleRestApiPOSTregisterauthenticatorstart:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/test-invoke-stage/POST/register-authenticator/start
+
+  RestApiregisterauthenticatorcompletePOSTApiPermissionexampleRestApiPOSTregisterauthenticatorcomplete:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiDeploymentStagev1}/POST/register-authenticator/complete
+
+  RestApiregisterauthenticatorcompletePOSTApiPermissionTestexampleRestApiPOSTregisterauthenticatorcomplete:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/test-invoke-stage/POST/register-authenticator/complete
+
+  RestApiauthenticatorslistPOSTApiPermissionexampleRestApiPOSTauthenticatorslist:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiDeploymentStagev1}/POST/authenticators/list
+
+  RestApiauthenticatorslistPOSTApiPermissionTestexampleRestApiPOSTauthenticatorslist:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/test-invoke-stage/POST/authenticators/list
+
+  RestApiauthenticatorsdeletePOSTApiPermissionexampleRestApiPOSTauthenticatorsdelete:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiDeploymentStagev1}/POST/authenticators/delete
+
+  RestApiauthenticatorsdeletePOSTApiPermissionTestexampleRestApiPOSTauthenticatorsdelete:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/test-invoke-stage/POST/authenticators/delete
+
+  RestApiauthenticatorsupdatePOSTApiPermissionexampleRestApiPOSTauthenticatorsupdate:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiDeploymentStagev1}/POST/authenticators/update
+
+  RestApiauthenticatorsupdatePOSTApiPermissionTestexampleRestApiPOSTauthenticatorsupdate:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/test-invoke-stage/POST/authenticators/update
+
+  RestApisigninchallengePOSTApiPermissionexampleRestApiPOSTsigninchallenge:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2Challenge.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiDeploymentStagev1}/POST/sign-in-challenge
+
+  RestApisigninchallengePOSTApiPermissionTestexampleRestApiPOSTsigninchallenge:
+    Type: AWS::Lambda::Permission
+    DependsOn: [ ApiGatewayAccountSetting ]
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Fido2Challenge.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/test-invoke-stage/POST/sign-in-challenge
+
+# ----------------------------------------------------------------------------------
+# ----------------------------- CloudFormation Outputs -----------------------------
+# ----------------------------------------------------------------------------------
+Outputs:
+  PasswordlessRestApiPasswordlessEndpointD4CE838B:
+    Value: !Sub https://${RestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${RestApiDeploymentStagev1}/
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolUserPoolClient
+  Fido2Url:
+    Value: !Sub https://${RestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${RestApiDeploymentStagev1}/
+  SpaUrl:
+    Value: !Sub https://${ExampleSpaDistribution.DomainName}
+  SpaBucket:
+    Value: !Ref ExampleSpaBucket

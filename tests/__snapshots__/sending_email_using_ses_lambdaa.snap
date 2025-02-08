@@ -2,13 +2,13 @@
 # --------------------------- CloudFormation Parameters ----------------------------
 # ----------------------------------------------------------------------------------
 Parameters:
-  AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3Bucket7CA07F13:
+  AssetParametersS3Bucket:
     Type: String
     Description: S3 bucket for asset "dcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cab"
-  AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3VersionKeyACFCB6F9:
+  AssetParametersS3VersionKey:
     Type: String
     Description: S3 key for asset version "dcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cab"
-  AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabArtifactHashD26B5196:
+  AssetParametersArtifactHash:
     Type: String
     Description: Artifact hash for asset "dcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cab"
 
@@ -51,7 +51,7 @@ Resources:
       Runtime: python3.6
       Handler: main.handler
       Code:
-        S3Bucket: !Ref AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3Bucket7CA07F13
+        S3Bucket: !Ref AssetParametersS3Bucket
         S3Key:
           !Join
             - ""
@@ -59,12 +59,12 @@ Resources:
                   - 0
                   - !Split
                       - "||"
-                      - !Ref AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3VersionKeyACFCB6F9
+                      - !Ref AssetParametersS3VersionKey
               - !Select
                   - 1
                   - !Split
                       - "||"
-                      - !Ref AssetParametersdcd2c84fda5b77d0d4b17b94d3581fbec6b5bd107cd4f898c2961d5b16e24cabS3VersionKeyACFCB6F9
+                      - !Ref AssetParametersS3VersionKey
 
   SendEmailEndPoint:
     Type: AWS::ApiGateway::RestApi
