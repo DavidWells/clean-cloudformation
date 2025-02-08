@@ -1,0 +1,529 @@
+# ----------------------------------------------------------------------------------
+# ---------------------------- CloudFormation Resources ----------------------------
+# ----------------------------------------------------------------------------------
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_phone_number
+            Priority: 1
+          - Name: verified_email
+            Priority: 2
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AliasAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      EmailVerificationMessage: The verification code to your new account is {####}
+      EmailVerificationSubject: Verify your new account
+      SmsVerificationMessage: The verification code to your new account is {####}
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailMessage: The verification code to your new account is {####}
+        EmailSubject: Verify your new account
+        SmsMessage: The verification code to your new account is {####}
+
+  UserPoolAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      AllowedOAuthFlows:
+        - implicit
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - profile
+        - phone
+        - email
+        - openid
+        - aws.cognito.signin.user.admin
+      CallbackURLs:
+        - https://example.com
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      UserPoolId: !Ref UserPool
+
+  AuthServiceApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: AuthServiceApi
+      Description: Authentication Service RestApi
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  AuthServiceApiDeploymentStageprod:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref AuthServiceApiDeployment
+      RestApiId: !Ref AuthServiceApi
+      StageName: prod
+
+  AuthServiceApiOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+          StatusCode: "204"
+      ResourceId: !GetAtt AuthServiceApi.RootResourceId
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauth:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt AuthServiceApi.RootResourceId
+      PathPart: auth
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+          StatusCode: "204"
+      ResourceId: !Ref AuthServiceApiauth
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignup:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref AuthServiceApiauth
+      PathPart: signup
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignupOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+          StatusCode: "204"
+      ResourceId: !Ref AuthServiceApiauthsignup
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignupPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SignupFn.Arn}/invocations
+      ResourceId: !Ref AuthServiceApiauthsignup
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthconfirmsignup:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref AuthServiceApiauth
+      PathPart: confirm_signup
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthconfirmsignupOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+          StatusCode: "204"
+      ResourceId: !Ref AuthServiceApiauthconfirmsignup
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthconfirmsignupPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfirmFn.Arn}/invocations
+      ResourceId: !Ref AuthServiceApiauthconfirmsignup
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignin:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref AuthServiceApiauth
+      PathPart: signin
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsigninOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+          StatusCode: "204"
+      ResourceId: !Ref AuthServiceApiauthsignin
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsigninPOST:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SigninFn.Arn}/invocations
+      ResourceId: !Ref AuthServiceApiauthsignin
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignout:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !Ref AuthServiceApiauth
+      PathPart: signout
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignoutOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'"
+            StatusCode: "204"
+        RequestTemplates:
+          application/json: "{ statusCode: 200 }"
+        Type: MOCK
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+          StatusCode: "204"
+      ResourceId: !Ref AuthServiceApiauthsignout
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignoutGET:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SignoutFn.Arn}/invocations
+      ResourceId: !Ref AuthServiceApiauthsignout
+      RestApiId: !Ref AuthServiceApi
+
+  SignupFnServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  SignupFn:
+    Type: AWS::Lambda::Function
+    DependsOn: [ SignupFnServiceRole ]
+    Properties:
+      Role: !GetAtt SignupFnServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: 1cc3dc59f5bc5b4c85126960add7537e33717865279ca02ceaa9479ca054db5a.zip
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          CLIENT_ID: !Ref UserPoolAppClient
+          REGION: !Ref AWS::Region
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+
+  ConfirmFnServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  ConfirmFn:
+    Type: AWS::Lambda::Function
+    DependsOn: [ ConfirmFnServiceRole ]
+    Properties:
+      Role: !GetAtt ConfirmFnServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: b048213aff95671ec4be473438452754858e5e21c1c3b2ddb9a2d1f470564c7d.zip
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          CLIENT_ID: !Ref UserPoolAppClient
+          REGION: !Ref AWS::Region
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+
+  SigninFnServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  SigninFn:
+    Type: AWS::Lambda::Function
+    DependsOn: [ SigninFnServiceRole ]
+    Properties:
+      Role: !GetAtt SigninFnServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: a8254f58ff7af7e6bf5991a80e0342ea8aa89c5fde8b8d7d2457f34d31ab7f77.zip
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          CLIENT_ID: !Ref UserPoolAppClient
+          REGION: !Ref AWS::Region
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+
+  SignoutFnServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+
+  SignoutFn:
+    Type: AWS::Lambda::Function
+    DependsOn: [ SignoutFnServiceRole ]
+    Properties:
+      Role: !GetAtt SignoutFnServiceRole.Arn
+      Runtime: nodejs18.x
+      Architectures:
+        - arm64
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 10
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: 7564b3916c1f0810e96c6dcdf0764b5b899420a8a6ce0015f43bf66eb5116441.zip
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          CLIENT_ID: !Ref UserPoolAppClient
+          REGION: !Ref AWS::Region
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+
+  AuthServiceApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - AuthServiceApiauthconfirmsignupOPTIONS
+      - AuthServiceApiauthconfirmsignupPOST
+      - AuthServiceApiauthconfirmsignup
+      - AuthServiceApiauthOPTIONS
+      - AuthServiceApiauth
+      - AuthServiceApiauthsigninOPTIONS
+      - AuthServiceApiauthsigninPOST
+      - AuthServiceApiauthsignin
+      - AuthServiceApiauthsignoutGET
+      - AuthServiceApiauthsignoutOPTIONS
+      - AuthServiceApiauthsignout
+      - AuthServiceApiauthsignupOPTIONS
+      - AuthServiceApiauthsignupPOST
+      - AuthServiceApiauthsignup
+      - AuthServiceApiOPTIONS
+    Properties:
+      Description: Authentication Service RestApi
+      RestApiId: !Ref AuthServiceApi
+
+  AuthServiceApiauthsignupPOSTApiPermissionAuthAppStackAuthServiceApiPOSTauthsignup:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SignupFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/${AuthServiceApiDeploymentStageprod}/POST/auth/signup
+
+  AuthServiceApiauthsignupPOSTApiPermissionTestAuthAppStackAuthServiceApiPOSTauthsignup:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SignupFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/test-invoke-stage/POST/auth/signup
+
+  AuthServiceApiauthconfirmsignupPOSTApiPermissionAuthAppStackAuthServiceApiPOSTauthconfirmsignup:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ConfirmFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/${AuthServiceApiDeploymentStageprod}/POST/auth/confirm_signup
+
+  AuthServiceApiauthconfirmsignupPOSTApiPermissionTestAuthAppStackAuthServiceApiPOSTauthconfirmsignup:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ConfirmFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/test-invoke-stage/POST/auth/confirm_signup
+
+  AuthServiceApiauthsigninPOSTApiPermissionAuthAppStackAuthServiceApiPOSTauthsignin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SigninFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/${AuthServiceApiDeploymentStageprod}/POST/auth/signin
+
+  AuthServiceApiauthsigninPOSTApiPermissionTestAuthAppStackAuthServiceApiPOSTauthsignin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SigninFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/test-invoke-stage/POST/auth/signin
+
+  AuthServiceApiauthsignoutGETApiPermissionAuthAppStackAuthServiceApiGETauthsignout:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SignoutFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/${AuthServiceApiDeploymentStageprod}/GET/auth/signout
+
+  AuthServiceApiauthsignoutGETApiPermissionTestAuthAppStackAuthServiceApiGETauthsignout:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SignoutFn.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${AuthServiceApi}/test-invoke-stage/GET/auth/signout
+
+# ----------------------------------------------------------------------------------
+# ----------------------------- CloudFormation Outputs -----------------------------
+# ----------------------------------------------------------------------------------
+Outputs:
+  AuthServiceApiEndpoint7E6B8279:
+    Value: !Sub https://${AuthServiceApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${AuthServiceApiDeploymentStageprod}/
