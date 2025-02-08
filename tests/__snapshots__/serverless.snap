@@ -1,0 +1,1620 @@
+functions:
+  fooBar:
+    handler: index.handler
+    events:
+      - http:
+          path: /
+          method: GET
+resources:
+
+  Description: (SO0199) Landing Zone Accelerator on AWS. Version 1.10.0.
+
+  Metadata:
+    AWS::CloudFormation::Interface:
+      ParameterGroups:
+        - Label:
+            default: Source Code Repository Configuration
+          Parameters:
+            - RepositorySource
+            - RepositoryOwner
+            - RepositoryName
+            - RepositoryBranchName
+        - Label:
+            default: Pipeline Configuration
+          Parameters:
+            - EnableApprovalStage
+            - ApprovalStageNotifyEmailList
+        - Label:
+            default: Mandatory Accounts Configuration
+          Parameters:
+            - ManagementAccountEmail
+            - LogArchiveAccountEmail
+            - AuditAccountEmail
+        - Label:
+            default: Environment Configuration
+          Parameters:
+            - ControlTowerEnabled
+            - AcceleratorPrefix
+            - EnableDiagnosticsPack
+        - Label:
+            default: Config Repository Configuration
+          Parameters:
+            - ConfigurationRepositoryLocation
+            - UseExistingConfigRepo
+            - ExistingConfigRepositoryName
+            - ExistingConfigRepositoryBranchName
+            - ExistingConfigRepositoryOwner
+            - ConfigCodeConnectionArn
+      ParameterLabels:
+        RepositorySource:
+          default: Source Location
+        RepositoryOwner:
+          default: Repository Owner
+        RepositoryName:
+          default: Repository Name
+        RepositoryBranchName:
+          default: Branch Name
+        ConfigurationRepositoryLocation:
+          default: Configuration Repository Location
+        UseExistingConfigRepo:
+          default: Use Existing Config Repository
+        ExistingConfigRepositoryName:
+          default: Existing Config Repository Name
+        ExistingConfigRepositoryBranchName:
+          default: Existing Config Repository Branch Name
+        ExistingConfigRepositoryOwner:
+          default: Existing Config Repository Owner
+        ConfigCodeConnectionArn:
+          default: Existing Config Repository CodeConnection ARN
+        EnableDiagnosticsPack:
+          default: Enable Diagnostics Pack
+        EnableApprovalStage:
+          default: Enable Approval Stage
+        ApprovalStageNotifyEmailList:
+          default: Manual Approval Stage notification email list
+        ManagementAccountEmail:
+          default: Management Account Email
+        LogArchiveAccountEmail:
+          default: Log Archive Account Email
+        AuditAccountEmail:
+          default: Audit Account Email
+        ControlTowerEnabled:
+          default: Control Tower Environment
+        AcceleratorPrefix:
+          default: Accelerator Resource name prefix
+
+# ----------------------------------------------------------------------------------
+# --------------------------- CloudFormation Parameters ----------------------------
+# ----------------------------------------------------------------------------------
+Parameters:
+    RepositorySource:
+      Type: String
+      Default: github
+      AllowedValues: ["github", "codecommit"]
+      Description: Specify the location to use to host the LZA source code
+    RepositoryOwner:
+      Type: String
+      Default: awslabs
+      Description: The owner of the repository containing the accelerator code. (GitHub Only)
+    RepositoryName:
+      Type: String
+      Default: landing-zone-accelerator-on-aws
+      Description: The name of the git repository hosting the accelerator code
+    RepositoryBranchName:
+      Type: String
+      Default: release/v1.10.0
+      AllowedPattern: .+
+      ConstraintDescription: The repository branch name must not be empty
+      Description: The name of the git branch to use for installation. To determine the branch name, navigate to the Landing Zone Accelerator GitHub branches page and choose the release branch you would like to deploy. Release branch names will align with the semantic versioning of our GitHub releases. New release branches will be available as the open source project is updated with new features.
+    EnableApprovalStage:
+      Type: String
+      Default: Yes
+      AllowedValues: ["Yes", "No"]
+      Description: Select yes to add a Manual Approval stage to accelerator pipeline
+    ApprovalStageNotifyEmailList:
+      Type: CommaDelimitedList
+      Description: Provide comma(,) separated list of email ids to receive manual approval stage notification email
+    ManagementAccountEmail:
+      Type: String
+      AllowedPattern: "[^\\s@]+@[^\\s@]+\\.[^\\s@]+"
+      ConstraintDescription: Must be a valid email address matching "[^\s@]+@[^\s@]+\.[^\s@]+"
+      Description: "The management (primary) account email - NOTE: This must match the address of the management account email as listed in AWS Organizations > AWS accounts."
+    LogArchiveAccountEmail:
+      Type: String
+      AllowedPattern: "[^\\s@]+@[^\\s@]+\\.[^\\s@]+"
+      ConstraintDescription: Must be a valid email address matching "[^\s@]+@[^\s@]+\.[^\s@]+"
+      Description: The log archive account email
+    AuditAccountEmail:
+      Type: String
+      AllowedPattern: "[^\\s@]+@[^\\s@]+\\.[^\\s@]+"
+      ConstraintDescription: Must be a valid email address matching "[^\s@]+@[^\s@]+\.[^\s@]+"
+      Description: The security audit account (also referred to as the audit account)
+    ControlTowerEnabled:
+      Type: String
+      Default: Yes
+      AllowedValues: ["Yes", "No"]
+      Description: Select yes if deploying to a Control Tower environment.  Select no if using just Organizations. If no, you must first set up mandatory accounts.
+    AcceleratorPrefix:
+      Type: String
+      Default: AWSAccelerator
+      AllowedPattern: "[A-Za-z0-9-]+"
+      Description: 'The prefix value for accelerator deployed resources. Leave the default value if using solution defined resource name prefix, the solution will use AWSAccelerator as resource name prefix. Note: Updating this value after initial installation will cause stack failure. Non-default value can not start with keyword "aws" or "ssm". Trailing dash (-) in non-default value will be ignored.'
+      MaxLength: 15
+    ConfigurationRepositoryLocation:
+      Type: String
+      AllowedValues: ["codecommit", "s3", "codeconnection"]
+      Description: Specify the location to use to host the LZA configuration files
+    UseExistingConfigRepo:
+      Type: String
+      Default: No
+      AllowedValues: ["Yes", "No"]
+      Description: 'Select Yes if deploying the solution with an existing configuration repository. Leave the default value if using the solution-deployed repository. If the AcceleratorPrefix parameter is set to the default value, the solution will deploy a repository named "aws-accelerator-config." Otherwise, the solution-deployed repository will be named "AcceleratorPrefix-config." Note: Updating this value after initial installation may cause adverse affects.'
+    ConfigCodeConnectionArn:
+      Type: String
+      Default: ""
+      Description: The ARN of an AWS CodeConnection referencing your existing LZA configuration repository. To use this parameter, useExistingConfigRepo must be set to Yes and ConfigurationRepositoryLocation must be set to codeconnection.
+    ExistingConfigRepositoryOwner:
+      Type: String
+      Default: ""
+      Description: The owner ID or namespace of the LZA configuration repository accessed through CodeConnection, such as the owner ID in GitHub. (CodeConnection only)
+    ExistingConfigRepositoryName:
+      Type: String
+      Default: ""
+      Description: The name of an existing LZA configuration repository hosting the accelerator configuration.
+    ExistingConfigRepositoryBranchName:
+      Type: String
+      Default: ""
+      Description: Specify the branch name of the existing LZA configuration repository to pull the accelerator configuration from.
+    EnableDiagnosticsPack:
+      Type: String
+      Default: Yes
+      AllowedValues: ["Yes", "No"]
+      Description: Select Yes if deploying the solution with diagnostics pack enabled. Diagnostics pack enables you to generate root cause reports to potentially diagnose pipeline failures.
+
+# ----------------------------------------------------------------------------------
+# --------------------------- CloudFormation Conditions ----------------------------
+# ----------------------------------------------------------------------------------
+Conditions:
+    IsCommercialCondition:
+      !Equals
+        - !Ref AWS::Partition
+        - aws
+    SolutionHelperAnonymousDataToAWS62E4FDE2:
+      !Equals
+        - !FindInMap
+            - SolutionHelperAnonymousData14B64A81
+            - SendAnonymizedData
+            - Data
+        - Yes
+    UseCodeCommitCondition:
+      !Equals
+        - !Ref RepositorySource
+        - codecommit
+    UseGitHubCondition:
+      !Equals
+        - !Ref RepositorySource
+        - github
+
+# ----------------------------------------------------------------------------------
+# ---------------------------- CloudFormation Mappings -----------------------------
+# ----------------------------------------------------------------------------------
+Mappings:
+    GlobalRegionMap:
+      aws:
+        regionName: us-east-1
+      aws-us-gov:
+        regionName: us-gov-west-1
+      aws-iso-e:
+        regionName: eu-isoe-west-1
+      aws-iso-f:
+        regionName: us-isof-south-1
+      aws-iso-b:
+        regionName: us-isob-east-1
+      aws-iso:
+        regionName: us-iso-east-1
+      aws-cn:
+        regionName: cn-northwest-1
+    SolutionHelperAnonymousData14B64A81:
+      SendAnonymizedData:
+        Data: Yes
+
+# ----------------------------------------------------------------------------------
+# ---------------------------- CloudFormation Resources ----------------------------
+# ----------------------------------------------------------------------------------
+Resources:
+    ResourceNamePrefixesResourceNamePrefixesFunctionServiceRole17DDBBF2:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+          Version: "2012-10-17"
+        ManagedPolicyArns:
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    ResourceNamePrefixesResourceNamePrefixesFunctionServiceRoleDefaultPolicyDC1CC159:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - ssm:GetParameters
+                - ssm:GetParameter
+                - ssm:PutParameter
+                - ssm:DeleteParameter
+              Condition:
+                StringEquals:
+                  aws:PrincipalAccount: !Ref AWS::AccountId
+              Effect: Allow
+              Resource:
+                - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/accelerator/lza-prefix
+                - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/accelerator/AWSAccelerator-PipelineStack-${AWS::AccountId}-${AWS::Region}/version
+              Sid: SsmReadParameterAccess
+          Version: "2012-10-17"
+        PolicyName: ResourceNamePrefixesResourceNamePrefixesFunctionServiceRoleDefaultPolicyDC1CC159
+        Roles:
+          - !Ref ResourceNamePrefixesResourceNamePrefixesFunctionServiceRole17DDBBF2
+    ResourceNamePrefixesResourceNamePrefixesFunction138C66F1:
+      Type: AWS::Lambda::Function
+      Properties:
+        Code:
+          ZipFile: |-2
+            
+                      const response = require('cfn-response'); 
+                      const { SSMClient, DeleteParameterCommand, GetParameterCommand, ParameterNotFound, PutParameterCommand } = require("@aws-sdk/client-ssm");
+                      const { ConfiguredRetryStrategy } = require("@aws-sdk/util-retry");
+                      exports.handler = async function (event, context) { 
+                      console.log(JSON.stringify(event, null, 4)); 
+                      const prefix=event.ResourceProperties.prefix;
+                      const pipelineStackVersionSsmParamName=event.ResourceProperties.pipelineStackVersionSsmParamName;
+                      const lowerCasePrefix=prefix.toLowerCase();
+                      
+                      const ssm = new SSMClient({retryStrategy: new ConfiguredRetryStrategy(10, (attempt) => 100 + attempt * 1000)});
+                      
+                      let data = {};
+                      
+                      let paramName = event.ResourceProperties.prefixParameterName;
+                      
+                      if (lowerCasePrefix === 'awsaccelerator') {
+                          data['acceleratorPrefix'] = 'AWSAccelerator';
+                          data['lowerCasePrefix'] = 'aws-accelerator'; 
+                          data['oneWordPrefix'] = 'accelerator';               
+                      } else {
+                          data['acceleratorPrefix'] = prefix;
+                          data['lowerCasePrefix'] = lowerCasePrefix; 
+                          data['oneWordPrefix'] = prefix; 
+                      }
+                              
+
+                      if (event.RequestType === 'Update'){
+
+                          var params = {
+                            Name: paramName,
+                          };
+                          try {
+                              const ssmResponse = await ssm.send(new GetParameterCommand(params));
+                              // Fail stack if prefix was changed during update
+                              if (ssmResponse.Parameter.Value !== prefix) {
+                                  await response.send(event, context, response.FAILED, {'FailureReason': 'LZA does not allow changing AcceleratorPrefix parameter value after initial deploy !!! Existing prefix: ' + event.OldResourceProperties.prefix + ' New prefix: ' + prefix + '.' }, event.PhysicalResourceId);
+                                  return;
+                              }
+                              await response.send(event, context, response.SUCCESS, data, event.PhysicalResourceId);
+                          } catch (error) {
+                              console.log(error);
+                              if (error instanceof ParameterNotFound){
+                                  await response.send(event, context, response.FAILED, {'FailureReason': 'LZA prefix ssm parameter ' + paramName + ' not found!!! Recreate the parameter with existing AcceleratorPrefix parameter value to fix the issue'}, event.PhysicalResourceId);
+                                  return;
+                              }
+                              else {
+                                  await response.send(event, context, response.FAILED, {'FailureReason': error.code + ' error occurred while accessing LZA prefix ssm parameter ' + paramName }, event.PhysicalResourceId);
+                                  return;
+                              }
+                          }          
+                      } 
+                      
+                      if (event.RequestType === 'Create') {
+                      
+                          if (lowerCasePrefix !== 'awsaccelerator') {
+                              // Fail stack if prefix starts with aws or ssm
+                              if (lowerCasePrefix.startsWith('aws') || lowerCasePrefix.startsWith('ssm')) { 
+                                  await response.send(event, context, response.FAILED, {'FailureReason': 'Accelerator prefix ' + prefix + ' can not be started with aws or ssm !!!'}, event.PhysicalResourceId);
+                                  return;
+                              }
+
+                              // Check if this is an existing deployment and prefix changed with initial deployment of custom resource
+                              var versionParams = {
+                                Name: pipelineStackVersionSsmParamName,
+                              };
+                              try {
+                                await ssm.send(new GetParameterCommand(versionParams));
+                                await response.send(event, context, response.FAILED, {'FailureReason': 'Can not change AcceleratorPrefix parameter for existing deployment, existing prefix value is AWSAccelerator, keep AcceleratorPrefix parameter value to default value for successfully stack update !!!'}, event.PhysicalResourceId);
+                                return;
+                              }
+                              catch (error) {
+                                console.log(error);
+                                if (!(error instanceof ParameterNotFound)){
+                                  await response.send(event, context, response.FAILED, {'FailureReason': error.code + ' error occurred while accessing LZA ssm parameter ' + pipelineStackVersionSsmParamName }, event.PhysicalResourceId);
+                                  return;
+                                }
+                              }
+                          }
+                      
+                          // Create /accelerator/lza-prefix SSM parameter to store prefix value to protect updating prefix
+                          try {
+                              var newParams = {
+                                    Name: paramName,
+                                    Value: prefix,
+                                    Description: 'LZA created SSM parameter for Accelerator prefix value, DO NOT MODIFY/DELETE this parameter',
+                                    Type: 'String',
+                                  };
+                              await ssm.send(new PutParameterCommand(newParams));
+                              await response.send(event, context, response.SUCCESS, data, event.PhysicalResourceId);
+                          }
+                          catch (error) {
+                              console.log(error);
+                              await response.send(event, context, response.FAILED, {'FailureReason': error.code + ' error occurred while creating LZA prefix ssm parameter ' + paramName }, event.PhysicalResourceId);
+                              return;
+                          }
+                      }
+                      if (event.RequestType === 'Delete') {
+
+                        var deleteParams = {
+                          Name: paramName,
+                        };
+                        try {
+                          await ssm.send(new DeleteParameterCommand(deleteParams));
+                        }
+                        catch (error) {
+                          console.log(error);
+                          if (!(error instanceof ParameterNotFound)){
+                            await response.send(event, context, response.FAILED, {'FailureReason': error.code + ' error occurred while deleting LZA ssm parameter ' + paramName }, event.PhysicalResourceId);
+                            return;
+                          }
+                        }
+                        await response.send(event, context, response.SUCCESS, {'Status': 'Custom resource deleted successfully' }, event.PhysicalResourceId);
+                      }
+                      
+                      return;
+                  }
+        Description: This function converts accelerator prefix parameter to lower case to name s3 buckets in installer stack
+        Handler: index.handler
+        Role: !GetAtt ResourceNamePrefixesResourceNamePrefixesFunctionServiceRole17DDBBF2.Arn
+        Runtime: nodejs18.x
+      DependsOn: [ ResourceNamePrefixesResourceNamePrefixesFunctionServiceRoleDefaultPolicyDC1CC159, ResourceNamePrefixesResourceNamePrefixesFunctionServiceRole17DDBBF2 ]
+    ResourceNamePrefixesGetPrefixResource96A10E6E:
+      Type: Custom::GetPrefixes
+      Properties:
+        ServiceToken: !GetAtt ResourceNamePrefixesResourceNamePrefixesFunction138C66F1.Arn
+        prefix: !Ref AcceleratorPrefix
+        pipelineStackVersionSsmParamName: !Sub /accelerator/AWSAccelerator-PipelineStack-${AWS::AccountId}-${AWS::Region}/version
+        prefixParameterName: /accelerator/lza-prefix
+      UpdateReplacePolicy: Delete
+      DeletionPolicy: Delete
+    ValidateInstallerValidationFunctionServiceRoleF5BE8F9B:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+          Version: "2012-10-17"
+        ManagedPolicyArns:
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    ValidateInstallerValidationFunctionServiceRoleDefaultPolicyAA8D9A47:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action: codepipeline:GetPipeline
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Pipeline
+              Sid: ReadCodePipeline
+          Version: "2012-10-17"
+        PolicyName: ValidateInstallerValidationFunctionServiceRoleDefaultPolicyAA8D9A47
+        Roles:
+          - !Ref ValidateInstallerValidationFunctionServiceRoleF5BE8F9B
+    ValidateInstallerValidationFunction21674768:
+      Type: AWS::Lambda::Function
+      Properties:
+        Code:
+          ZipFile: |
+            const response = require('cfn-response');
+            const { CodePipelineClient, GetPipelineCommand } = require('@aws-sdk/client-codepipeline');
+            exports.handler = async function (event, context) {
+              console.log(JSON.stringify(event, null, 4));
+
+              const configRepositoryLocation = event.ResourceProperties.configRepositoryLocation;
+
+              if (event.RequestType === 'Delete') {
+                await response.send(event, context, response.SUCCESS, {}, event.PhysicalResourceId);
+                return;
+              }
+
+              if (configRepositoryLocation === 's3') {
+                try {
+                  const pipelineName = event.ResourceProperties.acceleratorPipelineName;
+                  const client = new CodePipelineClient();
+                  const input = { name: pipelineName };
+                  const command = new GetPipelineCommand(input);
+                  const pipelineResponse = await client.send(command);
+                  const sourceStage = pipelineResponse.pipeline.stages.find(stage => stage.name === 'Source');
+                  const configAction = sourceStage?.actions.find(action => action.name === 'Configuration');
+                  if (configAction.actionTypeId.provider === 'CodeCommit') {
+                    await response.send(
+                      event,
+                      context,
+                      response.FAILED,
+                      {
+                        FailureReason:
+                          'ConfigRepositoryLocation parameter set to s3, but existing deployment using CodeCommit was detected. This value cannot be changed for existing deployments. Please set ConfigRepositoryLocation to CodeCommit and try again.',
+                      },
+                      event.PhysicalResourceId,
+                    );
+                    return;
+                  }
+                } catch (err) {
+                  console.log('Encountered error finding existing pipeline, continuing');
+                  console.log(err);
+                  await response.send(event, context, response.SUCCESS, {}, event.PhysicalResourceId);
+                  return;
+                }
+              }
+
+              // End of Validation
+              await response.send(event, context, response.SUCCESS, {}, event.PhysicalResourceId);
+              return;
+            };
+        Description: This function validates installer parameters
+        Handler: index.handler
+        Role: !GetAtt ValidateInstallerValidationFunctionServiceRoleF5BE8F9B.Arn
+        Runtime: nodejs18.x
+      DependsOn: [ ValidateInstallerValidationFunctionServiceRoleDefaultPolicyAA8D9A47, ValidateInstallerValidationFunctionServiceRoleF5BE8F9B ]
+    ValidateInstallerValidateResource24181D5D:
+      Type: AWS::CloudFormation::CustomResource
+      Properties:
+        ServiceToken: !GetAtt ValidateInstallerValidationFunction21674768.Arn
+        acceleratorPipelineName: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Pipeline
+        configRepositoryLocation: !Ref ConfigurationRepositoryLocation
+        resourceType: Custom::ValidateInstallerStack
+      UpdateReplacePolicy: Delete
+      DeletionPolicy: Delete
+    SsmParamStackId521A78D3:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: !Sub /${ResourceNamePrefixesGetPrefixResource96A10E6E.oneWordPrefix}/AWSAccelerator-InstallerStack/stack-id
+        Type: String
+        Value: !Ref AWS::StackId
+    SsmParamAcceleratorVersionFF83282D:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: !Sub /${ResourceNamePrefixesGetPrefixResource96A10E6E.oneWordPrefix}/AWSAccelerator-InstallerStack/version
+        Type: String
+        Value: 1.10.0
+    SolutionHelperServiceRoleF70C0E2A:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+          Version: "2012-10-17"
+        ManagedPolicyArns:
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    SolutionHelper4825923B:
+      Type: AWS::Lambda::Function
+      Properties:
+        Code:
+          ZipFile: "
+
+            \        const response = require('cfn-response');
+
+            \        const https = require('https');
+
+            \        async function post(url, data) {
+
+            \          const dataString = JSON.stringify(data)
+
+            \          const options = {
+
+            \              method: 'POST',
+
+            \              headers: {
+
+            \                  'Content-Type': 'application/json'
+
+            \              },
+
+            \              timeout: 1000, // in ms
+
+            \          }
+
+            \         \ 
+
+            \          return new Promise((resolve, reject) => {
+
+            \              const req = https.request(url, options, (res) => {
+
+            \                  if (res.statusCode < 200 || res.statusCode > 299) {
+
+            \                      return reject(new Error('HTTP status code: ', res.statusCode))
+
+            \                  }
+
+            \                  const body = []
+
+            \                  res.on('data', (chunk) => body.push(chunk))
+
+            \                  res.on('end', () => {
+
+            \                      const resString = Buffer.concat(body).toString()
+
+            \                      resolve(resString)
+
+            \                  })
+
+            \              })
+
+            \              req.on('error', (err) => {
+
+            \                  reject(err)
+
+            \              })
+
+            \              req.on('timeout', () => {
+
+            \                  req.destroy()
+
+            \                  reject(new Error('Request time out'))
+
+            \              })
+
+            \              req.write(dataString)
+
+            \              req.end()
+
+            \          })
+
+            \        }
+
+            \        function uuidv4() {
+
+            \          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+
+            \              var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+
+            \              return v.toString(16);
+
+            \          });
+
+            \        }
+
+            \        function sanitizeData(resourceProperties) {
+
+            \          const keysToExclude = ['ServiceToken', 'Resource', 'SolutionId', 'UUID'];
+
+            \          return Object.keys(resourceProperties).reduce((sanitizedData, key) => {
+
+            \              if (!keysToExclude.includes(key)) {
+
+            \                  sanitizedData[key] = resourceProperties[key];
+
+            \              }
+
+            \              return sanitizedData;
+
+            \          }, {})
+
+            \        }
+
+            \        exports.handler = async function (event, context) {
+
+            \          console.log(JSON.stringify(event, null, 4));
+
+            \          const requestType = event.RequestType;
+
+            \          const resourceProperties = event.ResourceProperties;
+
+            \          const resource = resourceProperties.Resource;
+
+            \          let data = {};
+
+            \          try {
+
+            \              if (resource === 'UUID' && requestType === 'Create') {
+
+            \                  data['UUID'] = uuidv4();
+
+            \              }
+
+            \              if (resource === 'AnonymousMetric') {
+
+            \                  const currentDate = new Date()
+
+            \                  data = sanitizeData(resourceProperties);
+
+            \                  data['RequestType'] = requestType;
+
+            \                  const payload = {
+
+            \                      Solution: resourceProperties.SolutionId,
+
+            \                      UUID: resourceProperties.UUID,
+
+            \                      TimeStamp: currentDate.toISOString(),
+
+            \                      Data: data
+
+            \                  }
+
+            \                  console.log('Sending metrics data: ', JSON.stringify(payload, null, 2));
+
+            \                  await post('https://metrics.awssolutionsbuilder.com/generic', payload);
+
+            \                  console.log('Sent Data');
+
+            \              }
+
+            \          } catch (error) {
+
+            \              console.log(error);
+
+            \          }
+
+            \     \ 
+
+            \          if (requestType === 'Create') {
+
+            \            await response.send(event, context, response.SUCCESS, data);
+
+            \          }
+
+            \          else {
+
+            \            await response.send(event, context, response.SUCCESS, data, event.PhysicalResourceId);
+
+            \          }
+
+            \          return;
+
+            \        }\ 
+
+            \      "
+        Description: This function generates UUID for each deployment and sends anonymous data to the AWS Solutions team
+        Handler: index.handler
+        Role: !GetAtt SolutionHelperServiceRoleF70C0E2A.Arn
+        Runtime: nodejs18.x
+        Timeout: 30
+      DependsOn: [ SolutionHelperServiceRoleF70C0E2A ]
+      Condition: SolutionHelperAnonymousDataToAWS62E4FDE2
+    SolutionHelperSolutionCreateUniqueID070ED802:
+      Type: Custom::CreateUUID
+      Properties:
+        ServiceToken: !GetAtt SolutionHelper4825923B.Arn
+        Resource: UUID
+      UpdateReplacePolicy: Delete
+      DeletionPolicy: Delete
+      Condition: SolutionHelperAnonymousDataToAWS62E4FDE2
+    SolutionHelperSolutionSendAnonymousData271B3D26:
+      Type: Custom::AnonymousData
+      Properties:
+        ServiceToken: !GetAtt SolutionHelper4825923B.Arn
+        Resource: AnonymousMetric
+        SolutionId: SO0199
+        UUID: !GetAtt SolutionHelperSolutionCreateUniqueID070ED802.UUID
+        Region: !Ref AWS::Region
+        BranchName: !Ref RepositoryBranchName
+        RepositoryName: !Ref RepositoryName
+        RepositoryOwner: !Ref RepositoryOwner
+        RepositorySource: !Ref RepositorySource
+      UpdateReplacePolicy: Delete
+      DeletionPolicy: Delete
+      Condition: SolutionHelperAnonymousDataToAWS62E4FDE2
+    InstallerKey2A6A8C6D:
+      Type: AWS::KMS::Key
+      Properties:
+        Description: AWS Accelerator Management Account Kms Key
+        EnableKeyRotation: true
+        KeyPolicy:
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+              Action: kms:*
+              Resource: "*"
+            - Sid: Allow Accelerator Role to use the encryption key
+              Effect: Allow
+              Principal:
+                AWS: "*"
+              Action:
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+                - kms:DescribeKey
+              Resource: "*"
+              Condition:
+                ArnLike:
+                  aws:PrincipalARN: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-*
+            - Sid: Allow SNS service to use the encryption key
+              Effect: Allow
+              Principal:
+                Service: sns.amazonaws.com
+              Action:
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+                - kms:DescribeKey
+              Resource: "*"
+            - Sid: Allow Cloudwatch Logs service to use the encryption key
+              Effect: Allow
+              Principal:
+                Service: !Sub logs.${AWS::Region}.amazonaws.com
+              Action:
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+                - kms:DescribeKey
+              Resource: "*"
+              Condition:
+                ArnLike:
+                  kms:EncryptionContext:aws:logs:arn: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+            - !If
+                - IsCommercialCondition
+                - Sid: KMS key access to codestar-notifications
+                  Effect: Allow
+                  Principal:
+                    Service: codestar-notifications.amazonaws.com
+                  Action:
+                    - kms:GenerateDataKey*
+                    - kms:Decrypt
+                  Resource: "*"
+                  Condition:
+                    StringEquals:
+                      kms:ViaService: !Sub sns.${AWS::Region}.amazonaws.com
+                - !Ref AWS::NoValue
+      UpdateReplacePolicy: Retain
+      DeletionPolicy: Retain
+    InstallerKeyAliasD5C174F0:
+      Type: AWS::KMS::Alias
+      Properties:
+        AliasName: !Sub alias/${ResourceNamePrefixesGetPrefixResource96A10E6E.oneWordPrefix}/installer/kms/key
+        TargetKeyId: !GetAtt InstallerKey2A6A8C6D.Arn
+    AcceleratorManagementKmsArnParameter1E6975BF:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: !Sub /${ResourceNamePrefixesGetPrefixResource96A10E6E.oneWordPrefix}/installer/kms/key-arn
+        Type: String
+        Value: !GetAtt InstallerKey2A6A8C6D.Arn
+    InstallerAccessLogsBucket647700E9:
+      Type: AWS::S3::Bucket
+      Properties:
+        AccessControl: LogDeliveryWrite
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        BucketName: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.lowerCasePrefix}-s3-logs-${AWS::AccountId}-${AWS::Region}
+        LifecycleConfiguration:
+          Rules:
+            - AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 1
+              ExpirationInDays: 1825
+              ExpiredObjectDeleteMarker: false
+              Id: !Sub LifecycleRule${ResourceNamePrefixesGetPrefixResource96A10E6E.lowerCasePrefix}-s3-logs-${AWS::AccountId}-${AWS::Region}
+              NoncurrentVersionExpiration:
+                NoncurrentDays: 1825
+              NoncurrentVersionTransitions:
+                - StorageClass: DEEP_ARCHIVE
+                  TransitionInDays: 366
+              Status: Enabled
+              Transitions:
+                - StorageClass: DEEP_ARCHIVE
+                  TransitionInDays: 365
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: BucketOwnerPreferred
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        VersioningConfiguration:
+          Status: Enabled
+      UpdateReplacePolicy: Retain
+      DeletionPolicy: Retain
+    InstallerAccessLogsBucketPolicy20D4E285:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref InstallerAccessLogsBucket647700E9
+        PolicyDocument:
+          Statement:
+            - Action: s3:*
+              Condition:
+                Bool:
+                  aws:SecureTransport: "false"
+              Effect: Deny
+              Principal:
+                AWS: "*"
+              Resource:
+                - !GetAtt InstallerAccessLogsBucket647700E9.Arn
+                - !Sub ${InstallerAccessLogsBucket647700E9.Arn}/*
+              Sid: deny-insecure-connections
+          Version: "2012-10-17"
+    InstallerAccessLogsBucketName4F700F48:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: !Sub /${ResourceNamePrefixesGetPrefixResource96A10E6E.oneWordPrefix}/installer-access-logs-bucket-name
+        Type: String
+        Value: !Ref InstallerAccessLogsBucket647700E9
+    SecureBucket747CD8C0:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                KMSMasterKeyID: !GetAtt InstallerKey2A6A8C6D.Arn
+                SSEAlgorithm: aws:kms
+        BucketName: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.lowerCasePrefix}-installer-${AWS::AccountId}-${AWS::Region}
+        LifecycleConfiguration:
+          Rules:
+            - AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 1
+              ExpirationInDays: 1825
+              ExpiredObjectDeleteMarker: false
+              Id: !Sub LifecycleRule${ResourceNamePrefixesGetPrefixResource96A10E6E.lowerCasePrefix}-installer-${AWS::AccountId}-${AWS::Region}
+              NoncurrentVersionExpiration:
+                NoncurrentDays: 1825
+              NoncurrentVersionTransitions:
+                - StorageClass: DEEP_ARCHIVE
+                  TransitionInDays: 366
+              Status: Enabled
+              Transitions:
+                - StorageClass: DEEP_ARCHIVE
+                  TransitionInDays: 365
+        LoggingConfiguration:
+          DestinationBucketName: !Ref InstallerAccessLogsBucket647700E9
+          LogFilePrefix: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.lowerCasePrefix}-installer-${AWS::AccountId}-${AWS::Region}/
+        OwnershipControls:
+          Rules:
+            - ObjectOwnership: BucketOwnerPreferred
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        VersioningConfiguration:
+          Status: Enabled
+      UpdateReplacePolicy: Retain
+      DeletionPolicy: Retain
+    SecureBucketPolicy6374AC61:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref SecureBucket747CD8C0
+        PolicyDocument:
+          Statement:
+            - Action: s3:*
+              Condition:
+                Bool:
+                  aws:SecureTransport: "false"
+              Effect: Deny
+              Principal:
+                AWS: "*"
+              Resource:
+                - !GetAtt SecureBucket747CD8C0.Arn
+                - !Sub ${SecureBucket747CD8C0.Arn}/*
+              Sid: deny-insecure-connections
+          Version: "2012-10-17"
+    InstallerAdminRole7DEE4AC8:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: codebuild.amazonaws.com
+          Version: "2012-10-17"
+        ManagedPolicyArns:
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+    InstallerAdminRoleDefaultPolicy7EEE1AAB:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Effect: Allow
+              Resource:
+                - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${InstallerProject879FF821}
+                - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${InstallerProject879FF821}:*
+            - Action:
+                - codebuild:CreateReportGroup
+                - codebuild:CreateReport
+                - codebuild:UpdateReport
+                - codebuild:BatchPutTestCases
+                - codebuild:BatchPutCodeCoverages
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${InstallerProject879FF821}-*
+            - Action:
+                - kms:Decrypt
+                - kms:Encrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+              Effect: Allow
+              Resource: !GetAtt InstallerKey2A6A8C6D.Arn
+            - Action:
+                - s3:GetObject*
+                - s3:GetBucket*
+                - s3:List*
+              Effect: Allow
+              Resource:
+                - !GetAtt SecureBucket747CD8C0.Arn
+                - !Sub ${SecureBucket747CD8C0.Arn}/*
+            - Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+              Effect: Allow
+              Resource: !GetAtt InstallerKey2A6A8C6D.Arn
+          Version: "2012-10-17"
+        PolicyName: InstallerAdminRoleDefaultPolicy7EEE1AAB
+        Roles:
+          - !Ref InstallerAdminRole7DEE4AC8
+    InstallerProject879FF821:
+      Type: AWS::CodeBuild::Project
+      Properties:
+        Artifacts:
+          Type: CODEPIPELINE
+        Cache:
+          Type: NO_CACHE
+        EncryptionKey: !GetAtt InstallerKey2A6A8C6D.Arn
+        Environment:
+          ComputeType: BUILD_GENERAL1_LARGE
+          EnvironmentVariables:
+            - Name: NODE_OPTIONS
+              Type: PLAINTEXT
+              Value: --max_old_space_size=12288 --no-warnings
+            - Name: CDK_NEW_BOOTSTRAP
+              Type: PLAINTEXT
+              Value: "1"
+            - Name: ACCELERATOR_REPOSITORY_SOURCE
+              Type: PLAINTEXT
+              Value: !Ref RepositorySource
+            - Name: ACCELERATOR_REPOSITORY_OWNER
+              Type: PLAINTEXT
+              Value: !Ref RepositoryOwner
+            - Name: ACCELERATOR_REPOSITORY_NAME
+              Type: PLAINTEXT
+              Value: !Ref RepositoryName
+            - Name: ACCELERATOR_REPOSITORY_BRANCH_NAME
+              Type: PLAINTEXT
+              Value: !Ref RepositoryBranchName
+            - Name: CONFIG_REPOSITORY_LOCATION
+              Type: PLAINTEXT
+              Value: !Ref ConfigurationRepositoryLocation
+            - Name: CODECONNECTION_ARN
+              Type: PLAINTEXT
+              Value: !Ref ConfigCodeConnectionArn
+            - Name: USE_EXISTING_CONFIG_REPO
+              Type: PLAINTEXT
+              Value: !Ref UseExistingConfigRepo
+            - Name: EXISTING_CONFIG_REPOSITORY_NAME
+              Type: PLAINTEXT
+              Value: !Ref ExistingConfigRepositoryName
+            - Name: EXISTING_CONFIG_REPOSITORY_BRANCH_NAME
+              Type: PLAINTEXT
+              Value: !Ref ExistingConfigRepositoryBranchName
+            - Name: EXISTING_CONFIG_REPOSITORY_OWNER
+              Type: PLAINTEXT
+              Value: !Ref ExistingConfigRepositoryOwner
+            - Name: ACCELERATOR_ENABLE_APPROVAL_STAGE
+              Type: PLAINTEXT
+              Value: !Ref EnableApprovalStage
+            - Name: APPROVAL_STAGE_NOTIFY_EMAIL_LIST
+              Type: PLAINTEXT
+              Value:
+                !Join
+                  - ","
+                  - !Ref ApprovalStageNotifyEmailList
+            - Name: MANAGEMENT_ACCOUNT_EMAIL
+              Type: PLAINTEXT
+              Value: !Ref ManagementAccountEmail
+            - Name: LOG_ARCHIVE_ACCOUNT_EMAIL
+              Type: PLAINTEXT
+              Value: !Ref LogArchiveAccountEmail
+            - Name: AUDIT_ACCOUNT_EMAIL
+              Type: PLAINTEXT
+              Value: !Ref AuditAccountEmail
+            - Name: CONTROL_TOWER_ENABLED
+              Type: PLAINTEXT
+              Value: !Ref ControlTowerEnabled
+            - Name: ACCELERATOR_PREFIX
+              Type: PLAINTEXT
+              Value: !GetAtt ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix
+            - Name: INSTALLER_STACK_NAME
+              Type: PLAINTEXT
+              Value: AWSAccelerator-InstallerStack
+            - Name: ENABLE_DIAGNOSTICS_PACK
+              Type: PLAINTEXT
+              Value: !Ref EnableDiagnosticsPack
+            - Name: PIPELINE_ACCOUNT_ID
+              Type: PLAINTEXT
+              Value: !Ref AWS::AccountId
+          Image: aws/codebuild/standard:7.0
+          ImagePullCredentialsType: CODEBUILD
+          PrivilegedMode: false
+          Type: LINUX_CONTAINER
+        Name: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-InstallerProject
+        ServiceRole: !GetAtt InstallerAdminRole7DEE4AC8.Arn
+        Source:
+          BuildSpec: !Sub |
+              version: "0.2"
+              phases:
+                install:
+                  runtime-versions:
+                    nodejs: 18
+                pre_build:
+                  commands:
+                    - ENABLE_EXTERNAL_PIPELINE_ACCOUNT="no"
+                    - if [ ! -z "$MANAGEMENT_ACCOUNT_ID" ] && [ ! -z "$MANAGEMENT_ACCOUNT_ROLE_NAME" ]; then ENABLE_EXTERNAL_PIPELINE_ACCOUNT="yes"; fi
+                    - set -e && if ! aws cloudformation describe-stacks --stack-name ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit --region ${AWS::Region}; then BOOTSTRAPPED_HOME="no"; fi
+                    - set -e && if ! aws cloudformation describe-stacks --stack-name ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit --region ; then BOOTSTRAPPED_GLOBAL="no"; fi
+                    - ENABLE_DIAGNOSTICS_PACK=${EnableDiagnosticsPack}
+                build:
+                  commands:
+                    - cd source
+                    - |-
+                      if [ "${AWS::Partition}" = "aws-cn" ]; then
+                                        sed -i "s#registry.yarnpkg.com#registry.npmmirror.com#g" yarn.lock;
+                                        set -e && yarn config set registry https://registry.npmmirror.com
+                                    fi
+                    - if [ -f .yarnrc ]; then yarn install --use-yarnrc .yarnrc; else yarn install; fi
+                    - yarn build
+                    - cd packages/@aws-accelerator/installer
+                    - set -e && if [ "$BOOTSTRAPPED_HOME" = "no" ]; then yarn run cdk bootstrap --toolkitStackName ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit aws://${AWS::AccountId}/${AWS::Region}--qualifier accel; fi
+                    - set -e &&  if [ "$BOOTSTRAPPED_GLOBAL" = "no" ]; then yarn run cdk bootstrap --toolkitStackName ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit aws://${AWS::AccountId}/--qualifier accel; fi
+                    - |-
+                      set -e && if [ $ENABLE_EXTERNAL_PIPELINE_ACCOUNT = "yes" ]; then
+                                        export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s" $(aws sts assume-role --role-arn arn:${AWS::Partition}:iam::"$MANAGEMENT_ACCOUNT_ID":role/"$MANAGEMENT_ACCOUNT_ROLE_NAME" --role-session-name acceleratorAssumeRoleSession --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text));
+                                        if ! aws cloudformation describe-stacks --stack-name ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit --region ${AWS::Region}; then MGMT_BOOTSTRAPPED_HOME="no"; fi;
+                                        if ! aws cloudformation describe-stacks --stack-name ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit --region ; then MGMT_BOOTSTRAPPED_GLOBAL="no"; fi;
+                                        if [ "$MGMT_BOOTSTRAPPED_HOME" = "no" ]; then yarn run cdk bootstrap --toolkitStackName ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit aws://$MANAGEMENT_ACCOUNT_ID/${AWS::Region}--qualifier accel; fi;
+                                        if [ "$MGMT_BOOTSTRAPPED_GLOBAL" = "no" ]; then yarn run cdk bootstrap --toolkitStackName ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-CDKToolkit aws://$MANAGEMENT_ACCOUNT_ID/--qualifier accel; fi;
+                                        unset AWS_ACCESS_KEY_ID;
+                                        unset AWS_SECRET_ACCESS_KEY;
+                                        unset AWS_SESSION_TOKEN;
+                                    fi
+                    - cd ../accelerator
+                    - |-
+                      aws ssm get-parameter --name /accelerator/migration --query "Parameter.Value" 2> /dev/null
+                                        status=$?
+                                        if [ $status -ne 0 ]; then
+                                          echo "No SSM Parameter found, setting ENABLE_ASEA_MIGRATION to false";
+                                          export ENABLE_ASEA_MIGRATION=false
+                                        else
+                                          echo "SSM Parameter Found, setting ENABLE_ASEA_MIGRATION to true"
+                                          export ENABLE_ASEA_MIGRATION=true
+                                        fi;
+                    - |-
+                      set -e && if [ $ENABLE_DIAGNOSTICS_PACK = "Yes" ]; then
+                                      yarn run ts-node --transpile-only cdk.ts deploy --require-approval never --stage diagnostics-pack --account ${AWS::AccountId} --region ${AWS::Region} --partition ${AWS::Partition}
+                                    fi
+                    - set -e && yarn run ts-node --transpile-only cdk.ts deploy --require-approval never --stage pipeline --account ${AWS::AccountId} --region ${AWS::Region} --partition ${AWS::Partition}
+                    - set -e && if [ "$ENABLE_TESTER" = "true" ]; then yarn run ts-node --transpile-only cdk.ts deploy --require-approval never --stage tester-pipeline --account ${AWS::AccountId} --region ${AWS::Region}; fi
+                post_build:
+                  commands:
+                    - |-
+                      if [ $CODEBUILD_BUILD_SUCCEEDING -eq 1 ]; then
+                                      inprogress_status_count=$(aws codepipeline get-pipeline-state --name "${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Pipeline" | grep '"status": "InProgress"' | grep -v grep | wc -l) &&
+                                      if [ $inprogress_status_count -eq 0 ]; then
+                                      set -e && aws codepipeline start-pipeline-execution --name "${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Pipeline";
+                                        fi
+                                    fi
+          Type: CODEPIPELINE
+    CodeCommitPipelineRole5C35E76C:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: codepipeline.amazonaws.com
+          Version: "2012-10-17"
+      Condition: UseCodeCommitCondition
+    CodeCommitPipelineRoleDefaultPolicyDE8B332B:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - s3:GetObject*
+                - s3:GetBucket*
+                - s3:List*
+                - s3:DeleteObject*
+                - s3:PutObject
+                - s3:PutObjectLegalHold
+                - s3:PutObjectRetention
+                - s3:PutObjectTagging
+                - s3:PutObjectVersionTagging
+                - s3:Abort*
+              Effect: Allow
+              Resource:
+                - !GetAtt SecureBucket747CD8C0.Arn
+                - !Sub ${SecureBucket747CD8C0.Arn}/*
+            - Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+                - kms:Encrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+              Effect: Allow
+              Resource: !GetAtt InstallerKey2A6A8C6D.Arn
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !GetAtt CodeCommitPipelineSourceCodePipelineActionRoleFB176191.Arn
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !GetAtt CodeCommitPipelineRole5C35E76C.Arn
+            - Action:
+                - codebuild:BatchGetBuilds
+                - codebuild:StartBuild
+                - codebuild:StopBuild
+              Effect: Allow
+              Resource: !GetAtt InstallerProject879FF821.Arn
+          Version: "2012-10-17"
+        PolicyName: CodeCommitPipelineRoleDefaultPolicyDE8B332B
+        Roles:
+          - !Ref CodeCommitPipelineRole5C35E76C
+      Condition: UseCodeCommitCondition
+    CodeCommitPipeline2208527B:
+      Type: AWS::CodePipeline::Pipeline
+      Properties:
+        ArtifactStore:
+          EncryptionKey:
+            Id: !GetAtt InstallerKey2A6A8C6D.Arn
+            Type: KMS
+          Location: !Ref SecureBucket747CD8C0
+          Type: S3
+        Name: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Installer
+        RestartExecutionOnUpdate: true
+        RoleArn: !GetAtt CodeCommitPipelineRole5C35E76C.Arn
+        Stages:
+          - Actions:
+              - ActionTypeId:
+                  Category: Source
+                  Owner: AWS
+                  Provider: CodeCommit
+                  Version: "1"
+                Configuration:
+                  RepositoryName: !Ref RepositoryName
+                  BranchName: !Ref RepositoryBranchName
+                  PollForSourceChanges: false
+                Name: Source
+                OutputArtifacts:
+                  - Name: Source
+                RoleArn: !GetAtt CodeCommitPipelineSourceCodePipelineActionRoleFB176191.Arn
+                RunOrder: 1
+            Name: Source
+          - Actions:
+              - ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: "1"
+                Configuration:
+                  ProjectName: !Ref InstallerProject879FF821
+                InputArtifacts:
+                  - Name: Source
+                Name: Install
+                RoleArn: !GetAtt CodeCommitPipelineRole5C35E76C.Arn
+                RunOrder: 1
+            Name: Install
+      DependsOn: [ CodeCommitPipelineRoleDefaultPolicyDE8B332B, CodeCommitPipelineRole5C35E76C ]
+      Condition: UseCodeCommitCondition
+    CodeCommitPipelineSourceCodePipelineActionRoleFB176191:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+          Version: "2012-10-17"
+      Condition: UseCodeCommitCondition
+    CodeCommitPipelineSourceCodePipelineActionRoleDefaultPolicyF71E0C0D:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - s3:GetObject*
+                - s3:GetBucket*
+                - s3:List*
+                - s3:DeleteObject*
+                - s3:PutObject
+                - s3:PutObjectLegalHold
+                - s3:PutObjectRetention
+                - s3:PutObjectTagging
+                - s3:PutObjectVersionTagging
+                - s3:Abort*
+              Effect: Allow
+              Resource:
+                - !GetAtt SecureBucket747CD8C0.Arn
+                - !Sub ${SecureBucket747CD8C0.Arn}/*
+            - Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+                - kms:Encrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+              Effect: Allow
+              Resource: !GetAtt InstallerKey2A6A8C6D.Arn
+            - Action:
+                - codecommit:GetBranch
+                - codecommit:GetCommit
+                - codecommit:UploadArchive
+                - codecommit:GetUploadArchiveStatus
+                - codecommit:CancelUploadArchive
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:${RepositoryName}
+          Version: "2012-10-17"
+        PolicyName: CodeCommitPipelineSourceCodePipelineActionRoleDefaultPolicyF71E0C0D
+        Roles:
+          - !Ref CodeCommitPipelineSourceCodePipelineActionRoleFB176191
+      Condition: UseCodeCommitCondition
+    GitHubPipelineRole6F4DEF1B:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: codepipeline.amazonaws.com
+          Version: "2012-10-17"
+      Condition: UseGitHubCondition
+    GitHubPipelineRoleDefaultPolicyD82457D6:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - s3:GetObject*
+                - s3:GetBucket*
+                - s3:List*
+                - s3:DeleteObject*
+                - s3:PutObject
+                - s3:PutObjectLegalHold
+                - s3:PutObjectRetention
+                - s3:PutObjectTagging
+                - s3:PutObjectVersionTagging
+                - s3:Abort*
+              Effect: Allow
+              Resource:
+                - !GetAtt SecureBucket747CD8C0.Arn
+                - !Sub ${SecureBucket747CD8C0.Arn}/*
+            - Action:
+                - kms:Decrypt
+                - kms:DescribeKey
+                - kms:Encrypt
+                - kms:ReEncrypt*
+                - kms:GenerateDataKey*
+              Effect: Allow
+              Resource: !GetAtt InstallerKey2A6A8C6D.Arn
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !GetAtt GitHubPipelineRole6F4DEF1B.Arn
+            - Action:
+                - codebuild:BatchGetBuilds
+                - codebuild:StartBuild
+                - codebuild:StopBuild
+              Effect: Allow
+              Resource: !GetAtt InstallerProject879FF821.Arn
+          Version: "2012-10-17"
+        PolicyName: GitHubPipelineRoleDefaultPolicyD82457D6
+        Roles:
+          - !Ref GitHubPipelineRole6F4DEF1B
+      Condition: UseGitHubCondition
+    GitHubPipeline7B79E906:
+      Type: AWS::CodePipeline::Pipeline
+      Properties:
+        ArtifactStore:
+          EncryptionKey:
+            Id: !GetAtt InstallerKey2A6A8C6D.Arn
+            Type: KMS
+          Location: !Ref SecureBucket747CD8C0
+          Type: S3
+        Name: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Installer
+        RestartExecutionOnUpdate: true
+        RoleArn: !GetAtt GitHubPipelineRole6F4DEF1B.Arn
+        Stages:
+          - Actions:
+              - ActionTypeId:
+                  Category: Source
+                  Owner: ThirdParty
+                  Provider: GitHub
+                  Version: "1"
+                Configuration:
+                  Owner: !Ref RepositoryOwner
+                  Repo: !Ref RepositoryName
+                  Branch: !Ref RepositoryBranchName
+                  OAuthToken: "{{resolve:secretsmanager:accelerator/github-token:SecretString:::}}"
+                  PollForSourceChanges: false
+                Name: Source
+                OutputArtifacts:
+                  - Name: Source
+                RunOrder: 1
+            Name: Source
+          - Actions:
+              - ActionTypeId:
+                  Category: Build
+                  Owner: AWS
+                  Provider: CodeBuild
+                  Version: "1"
+                Configuration:
+                  ProjectName: !Ref InstallerProject879FF821
+                InputArtifacts:
+                  - Name: Source
+                Name: Install
+                RoleArn: !GetAtt GitHubPipelineRole6F4DEF1B.Arn
+                RunOrder: 1
+            Name: Install
+      DependsOn: [ GitHubPipelineRoleDefaultPolicyD82457D6, GitHubPipelineRole6F4DEF1B ]
+      Condition: UseGitHubCondition
+    UpdatePipelineLambdaRole88CE0535:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+          Version: "2012-10-17"
+      Condition: UseGitHubCondition
+    UpdatePipelineLambdaPolicy284ABC36:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - codepipeline:GetPipeline
+                - codepipeline:UpdatePipeline
+              Effect: Allow
+              Resource:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Installer*
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Pipeline*
+            - Action:
+                - secretsmanager:GetResourcePolicy
+                - secretsmanager:GetSecretValue
+                - secretsmanager:DescribeSecret
+                - secretsmanager:ListSecretVersionIds
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:accelerator/github-token*
+            - Action: kms:Decrypt
+              Effect: Allow
+              Resource: "*"
+            - Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Effect: Allow
+              Resource: "*"
+            - Action: iam:PassRole
+              Effect: Allow
+              Resource:
+                - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-*
+                - !GetAtt GitHubPipelineRole6F4DEF1B.Arn
+          Version: "2012-10-17"
+        PolicyName: UpdatePipelineLambdaPolicy284ABC36
+        Roles:
+          - !Ref UpdatePipelineLambdaRole88CE0535
+      Condition: UseGitHubCondition
+    UpdatePipelineGithubTokenFunction29B64F2E:
+      Type: AWS::Lambda::Function
+      Properties:
+        Code:
+          ZipFile: |
+            /** *  Copyright 2022 Amazon.com, Inc. or its affiliates. All Rights Reserved. * *  Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance *  with the License. A copy of the License is located at * *      http://www.apache.org/licenses/LICENSE-2.0 * *  or in the 'license' file accompanying this file. This file is distributed on an 'AS IS' BASIS, WITHOUT WARRANTIES *  OR CONDITIONS OF ANY KIND, express or implied. See the License for the specific language governing permissions *  and limitations under the License. */
+            const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+            const { CodePipelineClient, GetPipelineCommand, UpdatePipelineCommand } = require('@aws-sdk/client-codepipeline');
+            const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
+
+            const secretsManager = new SecretsManagerClient({
+              retryStrategy: new ConfiguredRetryStrategy(10, attempt => 100 + attempt * 1000),
+            });
+            const codePipeline = new CodePipelineClient({
+              retryStrategy: new ConfiguredRetryStrategy(10, attempt => 100 + attempt * 1000),
+            });
+            const installerPipelineName = process.env['INSTALLER_PIPELINE_NAME'] ?? '';
+            const acceleratorPipelineName = process.env['ACCELERATOR_PIPELINE_NAME'] ?? '';
+            const pipelineArray = [installerPipelineName, acceleratorPipelineName];
+
+            /** * update-pipeline-github-token - lambda handler * * @param event * @returns */
+            exports.handler = async (event, context) => {
+              const secretDetails = event.detail.requestParameters;
+              const secretArn = secretDetails.secretId;
+              const secretValue = await getSecretValue(secretArn);
+              await updatePipelineDetailsForBothPipelines(secretValue);
+              return {
+                statusCode: 200,
+              };
+            };
+
+            async function getSecretValue(secretName) {
+              try {
+                const data = await secretsManager.send(
+                  new GetSecretValueCommand({
+                    SecretId: secretName,
+                  }),
+                );
+                if (!data || !data.SecretString) {
+                  throw new Error(`Secret ${secretName} didn't exist.`);
+                }
+                console.log(`Retrieved secret: ${secretName}...`);
+                return data.SecretString;
+              } catch (error) {
+                console.log(error);
+                throw new Error(`Error retrieving secret: ${secretName}.`);
+              }
+            }
+
+            async function updateCodePipelineSourceStage(pipelineDetails, secretValue) {
+              const pipelineStages = pipelineDetails.pipeline.stages;
+              const sourceStage = pipelineStages.find(o => o.name == 'Source');
+              const sourceAction = sourceStage.actions.find(a => a.name == 'Source');
+              if (sourceAction.actionTypeId.provider !== 'GitHub') {
+                console.log('Pipeline source is not GitHub, no action will be taken.');
+                return;
+              }
+              sourceAction.configuration.OAuthToken = secretValue;
+
+              return pipelineDetails;
+            }
+
+            async function getPipelineDetails(pipelineName) {
+              //This function retrieves the original Code Pipeline structure, so we can update it.
+              const getPipelineParams = {
+                name: pipelineName,
+              };
+              console.log(`Retrieving existing pipeline configuration for: ${pipelineName}...`);
+              const pipelineObject = await codePipeline.send(new GetPipelineCommand(getPipelineParams));
+              console.log(JSON.stringify(pipelineObject));
+              return pipelineObject;
+            }
+
+            async function updatePipeline(updatedPipelineDetails) {
+              //Remove metadata from getPipelineOutput to use as updatePipelineInput
+              delete updatedPipelineDetails.metadata;
+              console.log(`Updating pipeline with new OAuth Token...`);
+              return codePipeline.send(new UpdatePipelineCommand(updatedPipelineDetails));
+            }
+
+            async function updatePipelineDetailsForBothPipelines(secretValue) {
+              for (const pipeline of pipelineArray) {
+                try {
+                  const pipelineDetails = await getPipelineDetails(pipeline);
+                  const updatedPipelineDetails = await updateCodePipelineSourceStage(pipelineDetails, secretValue);
+                  if (updatedPipelineDetails) {
+                    await updatePipeline(updatedPipelineDetails);
+                  }
+                } catch (error) {
+                  console.error(error);
+                  throw new Error(`Error occurred while updating pipeline ${pipeline}`);
+                }
+              }
+            }
+        Description: Lambda function to update CodePipeline OAuth Token
+        Environment:
+          Variables:
+            ACCELERATOR_PIPELINE_NAME: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Pipeline
+            INSTALLER_PIPELINE_NAME: !Sub ${ResourceNamePrefixesGetPrefixResource96A10E6E.acceleratorPrefix}-Installer
+        Handler: index.handler
+        KmsKeyArn: !GetAtt InstallerKey2A6A8C6D.Arn
+        Role: !GetAtt UpdatePipelineLambdaRole88CE0535.Arn
+        Runtime: nodejs18.x
+        Timeout: 60
+      DependsOn: [ UpdatePipelineLambdaRole88CE0535 ]
+      Condition: UseGitHubCondition
+    UpdatePipelineGithubTokenRule79D83132:
+      Type: AWS::Events::Rule
+      Properties:
+        Description: Rule to trigger Lambda Function when the Github Accelerator Token has been updated.
+        EventPattern:
+          detail-type:
+            - AWS API Call via CloudTrail
+          detail:
+            eventSource:
+              - secretsmanager.amazonaws.com
+            eventName:
+              - UpdateSecret
+              - PutSecretValue
+            requestParameters:
+              secretId:
+                - prefix: !Sub arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:accelerator/github-token
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt UpdatePipelineGithubTokenFunction29B64F2E.Arn
+            Id: Target0
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 14400
+              MaximumRetryAttempts: 2
+      Condition: UseGitHubCondition
+    UpdatePipelineGithubTokenRuleAllowEventRuleAWSAcceleratorInstallerStackUpdatePipelineGithubTokenFunction2367C02A6E48B7BC:
+      Type: AWS::Lambda::Permission
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !GetAtt UpdatePipelineGithubTokenFunction29B64F2E.Arn
+        Principal: events.amazonaws.com
+        SourceArn: !GetAtt UpdatePipelineGithubTokenRule79D83132.Arn
+      Condition: UseGitHubCondition
+    # Here is a comment
+    # Here is another comment
+    UpdatePipelineGithubTokenFunctionLogGroupFCE3723A:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: !Sub /aws/lambda/${UpdatePipelineGithubTokenFunction29B64F2E}
+        RetentionInDays: 731
+      UpdateReplacePolicy: Delete
+      DeletionPolicy: Delete
+      Condition: UseGitHubCondition
+
+# ----------------------------------------------------------------------------------
+# ------------------------------ CloudFormation Rules ------------------------------
+# ----------------------------------------------------------------------------------
+Rules:
+    RequiredParametersForCodeConnection:
+      RuleCondition:
+        !Equals
+          - codeconnection
+          - !Ref ConfigurationRepositoryLocation
+      Assertions:
+        - Assert:
+            !Not
+              - !Equals [ "", !Ref ConfigCodeConnectionArn ]
+          AssertDescription: codeconnectionArn parameter must be provided when configRepositoryLocation is set to codeconnection
+        - Assert:
+            !Not
+              - !Equals [ No, !Ref UseExistingConfigRepo ]
+          AssertDescription: useExistingConfigRepo parameter must be set to "Yes" when configRepositoryLocation is set to codeconnection
+        - Assert:
+            !Not
+              - !Equals [ "", !Ref ExistingConfigRepositoryOwner ]
+          AssertDescription: existingConfigRepositoryOwner parameter must be populated when configRepositoryLocation is set to codeconnection
+    RequiredParametersForExistingRepo:
+      RuleCondition:
+        !Equals
+          - Yes
+          - !Ref UseExistingConfigRepo
+      Assertions:
+        - Assert:
+            !Not
+              - !Equals [ "", !Ref ExistingConfigRepositoryBranchName ]
+          AssertDescription: existingConfigRepositoryBranchName parameter must be provided when useExistingRepository is set to Yes
+        - Assert:
+            !Not
+              - !Equals [ "", !Ref ExistingConfigRepositoryName ]
+          AssertDescription: existingConfigRepositoryName parameter must be provided when useExistingRepository is set to Yes
+    RequiredParametersForS3Repo:
+      RuleCondition:
+        !Equals
+          - s3
+          - !Ref ConfigurationRepositoryLocation
+      Assertions:
+        - Assert:
+            !And
+              - !Equals [ "", !Ref ExistingConfigRepositoryName ]
+              - !Equals [ "", !Ref ExistingConfigRepositoryBranchName ]
+              - !Equals [ No, !Ref UseExistingConfigRepo ]
+          AssertDescription: Existing configuration repository parameters cannot be provided when configurationRepositoryLocation is set to s3

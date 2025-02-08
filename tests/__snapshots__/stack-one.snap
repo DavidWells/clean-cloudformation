@@ -1,6 +1,5 @@
-
 # ----------------------------------------------------------------------------------
-# ---------------------------- Cloudformation Mappings -----------------------------
+# ---------------------------- CloudFormation Mappings -----------------------------
 # ----------------------------------------------------------------------------------
 Mappings:
   LatestNodeRuntimeMap:
@@ -66,10 +65,9 @@ Mappings:
       value: nodejs20.x
 
 # ----------------------------------------------------------------------------------
-# ---------------------------- Cloudformation Resources ----------------------------
+# ---------------------------- CloudFormation Resources ----------------------------
 # ----------------------------------------------------------------------------------
 Resources:
-
   ApiGatewayAccountSetting:
     Type: AWS::ApiGateway::Account
     Properties:
@@ -172,6 +170,8 @@ Resources:
   CustomS3AutoDeleteObjectsCustomResourceProviderRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -179,26 +179,24 @@ Resources:
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   CustomS3AutoDeleteObjectsCustomResourceProviderHandler:
     Type: AWS::Lambda::Function
     DependsOn: [ CustomS3AutoDeleteObjectsCustomResourceProviderRole ]
     Properties:
-      Code:
-        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
-        S3Key: faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip
-      Timeout: 900
-      MemorySize: 128
-      Handler: index.handler
+      Description: !Sub Lambda function for auto-deleting objects in ${ExampleSpaBucket} S3 bucket.
       Role: !GetAtt CustomS3AutoDeleteObjectsCustomResourceProviderRole.Arn
       Runtime:
         !FindInMap
           - LatestNodeRuntimeMap
           - !Ref AWS::Region
           - value
-      Description: !Sub Lambda function for auto-deleting objects in ${ExampleSpaBucket} S3 bucket.
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 900
+      Code:
+        S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
+        S3Key: faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip
 
   ExampleSpaOAI:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -290,44 +288,44 @@ Resources:
   PasswordlessPreSignupPasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessPreSignupPasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessPreSignupPasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessPreSignupPasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: df1fb09f294aeaa07cb8eff505a53504681e262429c42a5f6b1bdf03f5f778f8.zip
       Environment:
         Variables:
           LOG_LEVEL: DEBUG
-      Handler: index.handler
-      Role: !GetAtt PasswordlessPreSignupPasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
 
   PasswordlessCreateAuthChallengePasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessCreateAuthChallengePasswordlessServiceRoleDefaultPolicy:
     Type: AWS::IAM::Policy
@@ -336,6 +334,7 @@ Resources:
       Roles:
         - !Ref PasswordlessCreateAuthChallengePasswordlessServiceRole
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action:
               - dynamodb:BatchGetItem
@@ -379,14 +378,17 @@ Resources:
                 kms:RequestAlias: alias/Passwordless-passwordless-example
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
-        Version: "2012-10-17"
 
   PasswordlessCreateAuthChallengePasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessCreateAuthChallengePasswordlessServiceRoleDefaultPolicy, PasswordlessCreateAuthChallengePasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessCreateAuthChallengePasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
+      Timeout: 5
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: 3626f522fe8e0b63e39bfac06393edcf6b922d39e8ab7644b845f60fc54430b2.zip
@@ -413,23 +415,19 @@ Resources:
           ORIGINATION_NUMBER: ""
           SENDER_ID: ""
           SNS_REGION: ""
-      Handler: index.handler
-      Role: !GetAtt PasswordlessCreateAuthChallengePasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
-      Timeout: 5
 
   PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRoleDefaultPolicy:
     Type: AWS::IAM::Policy
@@ -438,6 +436,7 @@ Resources:
       Roles:
         - !Ref PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRole
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action:
               - dynamodb:BatchGetItem
@@ -464,14 +463,17 @@ Resources:
                 kms:RequestAlias: !Ref PasswordlessKmsKeyRsaPasswordlessAlias
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/*
-        Version: "2012-10-17"
 
   PasswordlessVerifyAuthChallengeResponsePasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRoleDefaultPolicy, PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
+      Timeout: 5
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: d32590f8bc359eb518cfc0e943f3ada6ff0a44de4a00cdd22a32c61eaeb7a0eb.zip
@@ -489,60 +491,59 @@ Resources:
           ENFORCE_FIDO2_IF_AVAILABLE: ""
           USER_VERIFICATION: required
           SMS_OTP_STEP_UP_ENABLED: "TRUE"
-      Handler: index.handler
-      Role: !GetAtt PasswordlessVerifyAuthChallengeResponsePasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
-      Timeout: 5
 
   PasswordlessDefineAuthChallengePasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessDefineAuthChallengePasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessDefineAuthChallengePasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessDefineAuthChallengePasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
+      Timeout: 5
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: 1c2903a7d441ebeec7e5e4355db1144ee52f6fcc0a4ab388c4fd07b373ec876d.zip
       Environment:
         Variables:
           LOG_LEVEL: DEBUG
-      Handler: index.handler
-      Role: !GetAtt PasswordlessDefineAuthChallengePasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
-      Timeout: 5
 
   PasswordlessPreTokenPasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessPreTokenPasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessPreTokenPasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessPreTokenPasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: 4afc0f7fb079db5398a79a7fc61d813411335338c4b0a4375d33681f3bfcf53c.zip
@@ -550,22 +551,19 @@ Resources:
         Variables:
           LOG_LEVEL: DEBUG
           CLIENT_METADATA_PERSISTED_KEYS: signInMethod,consent_id
-      Handler: index.handler
-      Role: !GetAtt PasswordlessPreTokenPasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
 
   PasswordlessFido2NotificationPasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessFido2NotificationPasswordlessServiceRoleDefaultPolicy:
     Type: AWS::IAM::Policy
@@ -574,6 +572,7 @@ Resources:
       Roles:
         - !Ref PasswordlessFido2NotificationPasswordlessServiceRole
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: ses:SendEmail
             Effect: Allow
@@ -581,14 +580,17 @@ Resources:
           - Action: cognito-idp:AdminGetUser
             Effect: Allow
             Resource: !GetAtt UserPoolPasswordless.Arn
-        Version: "2012-10-17"
 
   PasswordlessFido2NotificationPasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessFido2NotificationPasswordlessServiceRoleDefaultPolicy, PasswordlessFido2NotificationPasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessFido2NotificationPasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
+      Timeout: 30
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: e7fe3b1c0421a478b6a790df226b6914ed5a46f6836ba451939e71966f43a7ed.zip
@@ -598,23 +600,19 @@ Resources:
           SES_FROM_ADDRESS: davidgregorywells@gmail.com
           SES_REGION: ""
           USER_POOL_ID: !Ref UserPoolPasswordless
-      Handler: index.handler
-      Role: !GetAtt PasswordlessFido2NotificationPasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
-      Timeout: 30
 
   PasswordlessFido2PasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessFido2PasswordlessServiceRoleDefaultPolicy:
     Type: AWS::IAM::Policy
@@ -623,6 +621,7 @@ Resources:
       Roles:
         - !Ref PasswordlessFido2PasswordlessServiceRole
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: lambda:InvokeFunction
             Effect: Allow
@@ -644,14 +643,17 @@ Resources:
             Resource:
               - !GetAtt Fido2AuthenticatorsTablePasswordless.Arn
               - !Sub ${Fido2AuthenticatorsTablePasswordless.Arn}/index/*
-        Version: "2012-10-17"
 
   PasswordlessFido2Passwordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessFido2PasswordlessServiceRoleDefaultPolicy, PasswordlessFido2PasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessFido2PasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
+      Timeout: 30
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: f82db5a2540b3639e6e0f9d0a3cadf859858a250fecc260584e42515ec032df6.zip
@@ -674,23 +676,19 @@ Resources:
           CORS_ALLOWED_METHODS: POST
           CORS_MAX_AGE: "86400"
           FIDO2_NOTIFICATION_LAMBDA_ARN: !Sub ${PasswordlessFido2NotificationPasswordless.Arn}:$LATEST
-      Handler: index.handler
-      Role: !GetAtt PasswordlessFido2PasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
-      Timeout: 30
 
   PasswordlessFido2ChallengePasswordlessServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   PasswordlessFido2ChallengePasswordlessServiceRoleDefaultPolicy:
     Type: AWS::IAM::Policy
@@ -699,6 +697,7 @@ Resources:
       Roles:
         - !Ref PasswordlessFido2ChallengePasswordlessServiceRole
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: dynamodb:PutItem
             Condition:
@@ -709,14 +708,17 @@ Resources:
                   - exp
             Effect: Allow
             Resource: !GetAtt Fido2AuthenticatorsTablePasswordless.Arn
-        Version: "2012-10-17"
 
   PasswordlessFido2ChallengePasswordless:
     Type: AWS::Lambda::Function
     DependsOn: [ PasswordlessFido2ChallengePasswordlessServiceRoleDefaultPolicy, PasswordlessFido2ChallengePasswordlessServiceRole ]
     Properties:
+      Role: !GetAtt PasswordlessFido2ChallengePasswordlessServiceRole.Arn
+      Runtime: nodejs18.x
       Architectures:
         - arm64
+      Handler: index.handler
+      Timeout: 30
       Code:
         S3Bucket: !Sub cdk-hnb659fds-assets-${AWS::AccountId}-${AWS::Region}
         S3Key: 6e2b3ff3517cb2b0b1d94a135ebac93927f6d3aead57cb9587d869774db5e2c8.zip
@@ -730,10 +732,6 @@ Resources:
           CORS_ALLOWED_HEADERS: Content-Type
           CORS_ALLOWED_METHODS: POST
           CORS_MAX_AGE: "86400"
-      Handler: index.handler
-      Role: !GetAtt PasswordlessFido2ChallengePasswordlessServiceRole.Arn
-      Runtime: nodejs18.x
-      Timeout: 30
 
   PasswordlessApigwAccessLogsPasswordless:
     Type: AWS::Logs::LogGroup
@@ -752,7 +750,7 @@ Resources:
     Properties:
       AccessLogSetting:
         DestinationArn: !GetAtt PasswordlessApigwAccessLogsPasswordless.Arn
-        Format: "{\"requestId\":\"$context.requestId\",\"jwtSub\":\"$context.authorizer.claims.sub\",\"jwtIat\":\"$context.authorizer.claims.iat\",\"jwtEventId\":\"$context.authorizer.claims.event_id\",\"jwtJti\":\"$context.authorizer.claims.jti\",\"jwtOriginJti\":\"$context.authorizer.claims.origin_jti\",\"jwtSignInMethod\":\"$context.authorizer.claims.sign_in_method\",\"userAgent\":\"$context.identity.userAgent\",\"sourceIp\":\"$context.identity.sourceIp\",\"requestTime\":\"$context.requestTime\",\"requestTimeEpoch\":\"$context.requestTimeEpoch\",\"httpMethod\":\"$context.httpMethod\",\"path\":\"$context.path\",\"status\":\"$context.status\",\"authorizerError\":\"$context.authorizer.error\",\"apiError\":\"$context.error.message\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\",\"responseLatency\":\"$context.responseLatency\",\"domainName\":\"$context.domainName\"}"
+        Format: '{"requestId":"$context.requestId","jwtSub":"$context.authorizer.claims.sub","jwtIat":"$context.authorizer.claims.iat","jwtEventId":"$context.authorizer.claims.event_id","jwtJti":"$context.authorizer.claims.jti","jwtOriginJti":"$context.authorizer.claims.origin_jti","jwtSignInMethod":"$context.authorizer.claims.sign_in_method","userAgent":"$context.identity.userAgent","sourceIp":"$context.identity.sourceIp","requestTime":"$context.requestTime","requestTimeEpoch":"$context.requestTimeEpoch","httpMethod":"$context.httpMethod","path":"$context.path","status":"$context.status","authorizerError":"$context.authorizer.error","apiError":"$context.error.message","protocol":"$context.protocol","responseLength":"$context.responseLength","responseLatency":"$context.responseLatency","domainName":"$context.domainName"}'
       DeploymentId: !Ref PasswordlessRestApiPasswordlessDeployment
       MethodSettings:
         - DataTraceEnabled: false
@@ -1321,9 +1319,9 @@ Resources:
   CognitoAuthorizerPasswordless:
     Type: AWS::ApiGateway::Authorizer
     Properties:
+      Name: passwordlessexampleCognitoAuthorizerPasswordless6856220B
       AuthorizerResultTtlInSeconds: 60
       IdentitySource: method.request.header.Authorization
-      Name: passwordlessexampleCognitoAuthorizerPasswordless6856220B
       ProviderARNs:
         - !GetAtt UserPoolPasswordless.Arn
       RestApiId: !Ref PasswordlessRestApiPasswordless
@@ -1332,15 +1330,15 @@ Resources:
   ApiGatewayCloudWatchLogsRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Action: sts:AssumeRole
             Effect: Allow
             Principal:
               Service: apigateway.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
 
   ReqValidator:
     Type: AWS::ApiGateway::RequestValidator
@@ -1353,9 +1351,9 @@ Resources:
   CompleteRegistrationModelPasswordless:
     Type: AWS::ApiGateway::Model
     Properties:
-      ContentType: application/json
-      Description: Create FIDO2 credential request body
       Name: registerAuthenticatorComplete
+      Description: Create FIDO2 credential request body
+      ContentType: application/json
       RestApiId: !Ref PasswordlessRestApiPasswordless
       Schema:
         type: object
@@ -1389,9 +1387,9 @@ Resources:
   DeleteCredentialModelPasswordless:
     Type: AWS::ApiGateway::Model
     Properties:
-      ContentType: application/json
-      Description: Delete FIDO2 credential request body
       Name: credentialDelete
+      Description: Delete FIDO2 credential request body
+      ContentType: application/json
       RestApiId: !Ref PasswordlessRestApiPasswordless
       Schema:
         type: object
@@ -1406,9 +1404,9 @@ Resources:
   UpdateCredentialModelPasswordless:
     Type: AWS::ApiGateway::Model
     Properties:
-      ContentType: application/json
-      Description: Update FIDO2 credential request body
       Name: credentialUpdate
+      Description: Update FIDO2 credential request body
+      ContentType: application/json
       RestApiId: !Ref PasswordlessRestApiPasswordless
       Schema:
         type: object
@@ -1566,7 +1564,7 @@ Resources:
       SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${PasswordlessRestApiPasswordless}/test-invoke-stage/POST/sign-in-challenge
 
 # ----------------------------------------------------------------------------------
-# ----------------------------- Cloudformation Outputs -----------------------------
+# ----------------------------- CloudFormation Outputs -----------------------------
 # ----------------------------------------------------------------------------------
 Outputs:
   PasswordlessRestApiPasswordlessEndpointD4CE838B:
