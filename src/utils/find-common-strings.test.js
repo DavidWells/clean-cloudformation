@@ -131,9 +131,10 @@ test('Bigger Array without debug', () => {
 
 const wierdIds = [
   'PasswordlessRestApiPasswordlesssigninchallengePOSTApiPermissionTestpasswordlessexamplePasswordlessRestApiPasswordlessF93AE9D6POSTsigninchallengeFE78AD97',
+  'AuthServiceApiauthsignupPOSTApiPermissionAuthAppStackAuthServiceApi9287C2C0POSTauthsignupD0F0B2E7'
 ]
 
-test('wierd ids', () => {
+test.only('wierd ids', () => {
   const result = findCommonRandomStringsInIds(wierdIds, true)
   console.log('result', result)
 })

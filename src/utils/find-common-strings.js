@@ -1,6 +1,7 @@
 // https://regex101.com/r/rS5Ijq/1
 const NUMBER_IN_FIRST_FOUR_CHARS = /^(?=[A-Z0-9]{8}$)(?=[A-Z0-9]{0,3}[0-9])[A-Z0-9]{8}/
-const IS_REST = /^POST|GET|PUT|DELETE|PATCH|OPTIONS|HEAD/
+const STARTS_WITH_REST = /^POST|GET|PUT|DELETE|PATCH|OPTIONS|HEAD/
+const ENDS_WITH_REST = /POST|GET|PUT|DELETE|PATCH|OPTIONS|HEAD$/
 const debugKey = ''
 
 /**
@@ -61,7 +62,7 @@ function findCommonRandomStringsInIds(logicalIds, debug = false) {
 
         // For standard 8-char patterns
         if (postfix.length === 8) {
-          if (IS_REST.test(postfix)) continue;
+          if (STARTS_WITH_REST.test(postfix) || ENDS_WITH_REST.test(postfix)) continue;
           /* Matches must have 1 digit and 1 letter in the first 4 characters or start with 4 capital letters */
           if (/[0-9]/.test(postfix) && (NUMBER_IN_FIRST_FOUR_CHARS.test(postfix) || /^[A-Z]{4}/.test(postfix))) {
             const existing = postfixes.get(postfix) || [0, [], pattern];

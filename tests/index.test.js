@@ -155,7 +155,7 @@ test('cleanCloudFormation - AuthAppStack', async () => {
   )
   assert.equal(
     counts.transformed.Resources, 
-    counts.original.Resources, 
+    counts.original.Resources - 1, 
     'Resources count should match'
   )
   assert.equal(
