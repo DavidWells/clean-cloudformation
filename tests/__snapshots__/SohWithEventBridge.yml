@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 # ----------------------------------------------------------------------------------
-# --------------------------- Cloudformation Parameters ----------------------------
+# --------------------------- CloudFormation Parameters ----------------------------
 # ----------------------------------------------------------------------------------
 Parameters:
   ApiDestination:
@@ -11,7 +11,7 @@ Parameters:
     Default: https://t23ilm51j6.execute-api.ap-southeast-2.amazonaws.com/dev/200
 
 # ----------------------------------------------------------------------------------
-# ---------------------------- Cloudformation Resources ----------------------------
+# ---------------------------- CloudFormation Resources ----------------------------
 # ----------------------------------------------------------------------------------
 Resources:
   DynamoDBStockOnHandTable:
@@ -152,6 +152,7 @@ Resources:
         - Arn: !GetAtt EventLogGroup.Arn
           Id: EventLogGroupTarget
 
+  # IAM Role for EventBridge to CloudWatch Logs
   LogRole:
     Type: AWS::IAM::Role
     Properties:
@@ -180,12 +181,12 @@ Resources:
     Type: AWS::Events::Connection
     Properties:
       Name: StockOnHandApiConnection
+      Description: Connection to API Gateway
       AuthorizationType: API_KEY
       AuthParameters:
         ApiKeyAuthParameters:
           ApiKeyName: x-api-key
           ApiKeyValue: xxx
-      Description: Connection to API Gateway
 
   EventApiDestination:
     Type: AWS::Events::ApiDestination
@@ -214,11 +215,11 @@ Resources:
           dynamodb:
             OldImage:
               soh:
-                "N":
+                N:
                   - anything-but: "0"
             NewImage:
               soh:
-                "N":
+                N:
                   - "0"
       State: ENABLED
       Targets:
@@ -254,11 +255,11 @@ Resources:
           dynamodb:
             NewImage:
               soh:
-                "N":
+                N:
                   - anything-but: "0"
             OldImage:
               soh:
-                "N":
+                N:
                   - "0"
       State: ENABLED
       Targets:
