@@ -37,11 +37,29 @@ function formatTemplateObject(template) {
   removeCDKResourceMetadata(template)
   removeCDKMetadataCondition(template)
   removeCDKTagsFromResources(template)
-  
+
+  /*
+  console.log('template.Resources', template.Resources)
+  console.log('x', findCommonRandomStringsInIds(Object.keys(template.Resources)))
+  process.exit(1)
+  /** */
+
+
   /* Remove Hex postfix from conditions, resource names, and parameters */
   const conditionMatches = cleanConditionNames(template) || []
   const resourceMatches = cleanResourceNames(template) || []
   const parameterMatches = cleanParameterNames(template) || []
+
+  console.log('conditionMatches', conditionMatches)
+  console.log('resourceMatches', resourceMatches)
+  console.log('parameterMatches', parameterMatches)
+  //process.exit(1)
+
+  const randomStrings = [
+    ...conditionMatches, 
+    ...resourceMatches, 
+    ...parameterMatches
+  ]
 
   // console.log('template.Parameters', template.Parameters)
   // process.exit(1)
@@ -52,7 +70,7 @@ function formatTemplateObject(template) {
 
   return {
     template,
-    randomStrings: [...conditionMatches, ...resourceMatches, ...parameterMatches]
+    randomStrings
   }
 }
 
@@ -248,10 +266,10 @@ function cleanParameterNames(template) {
       parameterNames.forEach(originalName => {
         const currentName = parameterChanges.get(originalName)
         if (currentName.includes(randomString)) {
-          console.log('paramName', currentName, randomString)
+          // console.log('paramName', currentName, randomString)
           // Create new name by removing the random string
           const newName = currentName.replace(randomString, '')
-          console.log('newName', newName)
+          // console.log('newName', newName)
           parameterChanges.set(originalName, newName)
           allMatchesSet.add(randomString)
         }

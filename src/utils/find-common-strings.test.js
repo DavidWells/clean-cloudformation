@@ -27,7 +27,7 @@ test('finds 8-char hex postfixes', () => {
   assert.equal(result[1][1], 1)
 })
 
-test.only('finds mixed length hex strings', () => {
+test('finds mixed length hex strings', () => {
   const ids = [
     'Resource9f96ad63152a',  // 12-char
     'FunctionB02F3B1B8e03bd86b4d66bb1d95d9f96ad63152a', // 40-char
@@ -62,7 +62,7 @@ test('ignores non-hex strings', () => {
   const ids = [
     'MyFunction12345678', // Not hex
     'Resource7AAD8855',   // Valid hex
-    'OtherXYZWABCD'      // Not hex
+    'OtherXYZWABCD'       // Not hex
   ]
   const result = findCommonRandomStringsInIds(ids)
   console.log('result', result)
@@ -127,6 +127,15 @@ test('Bigger Array without debug', () => {
   assert.equal(match75625A82[1], 2) // count should be 2
   assert.equal(match75625A82[2].length, 2) // should have 2 matches
   assert.equal(match75625A82[3], undefined) // pattern should not be present
+})
+
+const wierdIds = [
+  'PasswordlessRestApiPasswordlesssigninchallengePOSTApiPermissionTestpasswordlessexamplePasswordlessRestApiPasswordlessF93AE9D6POSTsigninchallengeFE78AD97',
+]
+
+test('wierd ids', () => {
+  const result = findCommonRandomStringsInIds(wierdIds, true)
+  console.log('result', result)
 })
 
 test.run() 
