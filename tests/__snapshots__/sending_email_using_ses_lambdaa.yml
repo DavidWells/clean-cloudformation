@@ -104,22 +104,6 @@ Resources:
       PathPart: sendmail
       RestApiId: !Ref SendEmailEndPoint
 
-  SendEmailEndPointsendmailPOSTApiPermissionPythonStackSendEmailEndPoint74996537POSTsendmail:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt HandleSendEmail.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SendEmailEndPoint}/${SendEmailEndPointDeploymentStageprod}/POST/sendmail
-
-  SendEmailEndPointsendmailPOSTApiPermissionTestPythonStackSendEmailEndPoint74996537POSTsendmail:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt HandleSendEmail.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SendEmailEndPoint}/test-invoke-stage/POST/sendmail
-
   SendEmailEndPointsendmailPOST:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -138,6 +122,22 @@ Resources:
     Properties:
       Description: Automatically created by the RestApi construct
       RestApiId: !Ref SendEmailEndPoint
+
+  SendEmailEndPointsendmailPOSTApiPermissionPythonStackSendEmailEndPointPOSTsendmail:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt HandleSendEmail.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SendEmailEndPoint}/${SendEmailEndPointDeploymentStageprod}/POST/sendmail
+
+  SendEmailEndPointsendmailPOSTApiPermissionTestPythonStackSendEmailEndPointPOSTsendmail:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt HandleSendEmail.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SendEmailEndPoint}/test-invoke-stage/POST/sendmail
 
 # ----------------------------------------------------------------------------------
 # ----------------------------- CloudFormation Outputs -----------------------------
