@@ -18,6 +18,7 @@ const { deepLog } = require('./utils/logger')
 const { createPatch } = require('diff')
 const stripAnsi = require('strip-ansi')  // v6.0.1
 const jestDiff = require('jest-diff').diff
+const { findCommonRandomStringsInIds } = require('./utils/find-common-strings')
 
 async function cleanCloudFormation(input, opts = {}) {
   const _options = opts || {}
@@ -64,6 +65,7 @@ async function cleanCloudFormation(input, opts = {}) {
   const { randomStrings } = formatTemplateObject(template)
 
   // console.log('randomStrings', randomStrings)
+  // process.exit(1)
 
   // First handle random string replacements
   const { Resources, via } = resolveResources(template)
@@ -115,9 +117,11 @@ async function cleanCloudFormation(input, opts = {}) {
   
   // Validate the transformed template
   const isValid = await validateTemplate(transformedTemplate)
-  console.log('isValid', isValid)
-
+  // console.log('isValid', isValid)
+  // process.exit(1)
   if (!isValid && options.strict) {
+    // console.error('Template validation failed')
+    // process.exit(1)
     throw new Error('Template validation failed')
   }
 
@@ -153,6 +157,19 @@ async function cleanCloudFormation(input, opts = {}) {
   yamlNoComments = addSectionHeaders(yamlNoComments)
   yamlWithComments = formatYamlString(yamlWithComments)
   yamlWithComments = addSectionHeaders(yamlWithComments)
+
+  // Validate YAML syntax
+  try {
+    yaml.load(yamlWithComments, { schema: getCfnYamlSchema() })
+    yaml.load(yamlNoComments, { schema: getCfnYamlSchema() })
+  } catch (e) {
+    console.error('Invalid YAML generated:')
+    console.error(e.message)
+    // Optional: log the problematic YAML
+    console.error('\nProblematic YAML:')
+    console.error(e.mark ? yamlWithComments.split('\n').slice(Math.max(0, e.mark.line - 3), e.mark.line + 2).join('\n') : yamlWithComments)
+    throw new Error('YAML validation failed')
+  }
 
   /* Collect names after any transformations */
   const { foundPropNames, prompt } = await collectNames(template, {
@@ -566,54 +583,6 @@ function handleReplacement(pattern, replacement, logicalId, resource) {
     }
     return replacement(payload)
   }
-}
-
-function findCommonRandomStringsInIds(logicalIds) {
-  const postfixes = new Map(); // Map to store postfix -> count
-  
-  // Look for patterns at the end of logical IDs that:
-  // 1. 40-char hex pattern (like 663240D697c3cdfc601da74f263d2bb8dcbb4a90)
-  // 2. Standard 8-char pattern (like ADDA7DEB)
-  // 3. Longer hex pattern (like 1cd5ccdaa0c6)
-  const patterns = [
-    /[A-Fa-f0-9]{40}$/g,  // 40-char hex deployment id (both upper and lower case)
-    /[A-Z0-9]{8}/g,    // Standard pattern (ADDA7DEB)
-    /\d[A-Z0-9]{7}/g,  // Starts with number (03AA31B2)
-    /[A-Z][0-9A-Z]{7}/g, // Starts with letter (E5522E5D)
-    /[a-f0-9]{12}$/g   // 12-char lowercase hex (1cd5ccdaa0c6)
-  ];
-  
-  for (const id of logicalIds) {
-    // Try each pattern
-    for (const pattern of patterns) {
-      const matches = Array.from(id.matchAll(pattern));
-      for (const match of matches) {
-        const postfix = match[0];
-        // For standard 8-char patterns
-        if (postfix.length === 8) {
-          if (/[A-Z]/.test(postfix) && /[0-9]/.test(postfix)) {
-            postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
-          }
-        }
-        // For 40-char or 12-char hex patterns
-        else if (postfix.length === 40 || postfix.length === 12) {
-          if (/[A-Fa-f]/.test(postfix) && /[0-9]/.test(postfix)) {
-            postfixes.set(postfix, (postfixes.get(postfix) || 0) + 1);
-          }
-        }
-      }
-    }
-  }
-
-  return Array.from(postfixes.entries())
-    .sort(([p1, c1], [p2, c2]) => {
-      // First sort by length (descending)
-      if (p1.length !== p2.length) {
-        return p2.length - p1.length;
-      }
-      // Then by count (descending)
-      return c2 - c1;
-    });
 }
 
 // Update replaceLogicalIds to handle both cases

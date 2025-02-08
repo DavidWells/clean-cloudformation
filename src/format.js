@@ -1,4 +1,5 @@
 const removeEmptyTopLevelKeys = require('./utils/formatters/clean-empty-object-keys')
+const { findCommonRandomStringsInIds } = require('./utils/find-common-strings')
 const {
   removeCDKRootNag,
   removeCDKBootstrapVersionRule,
@@ -37,30 +38,21 @@ function formatTemplateObject(template) {
   removeCDKMetadataCondition(template)
   removeCDKTagsFromResources(template)
   
-  /* Remove Hex postfix from conditions and resource names */
-  //*
+  /* Remove Hex postfix from conditions, resource names, and parameters */
   const conditionMatches = cleanConditionNames(template) || []
   const resourceMatches = cleanResourceNames(template) || []
-  /** */
+  const parameterMatches = cleanParameterNames(template) || []
 
-  /*
-  console.log('conditionMatches', conditionMatches)
-  console.log('resourceMatches', resourceMatches)
-  process.exit(1)
-  /** */
+  // console.log('template.Parameters', template.Parameters)
+  // process.exit(1)
   
   transformParameterArrays(template)
   
   sortResourceKeys(template)
 
-  /*
-  console.log('template', dumpYaml(template))
-  process.exit(1)
-  /** */
-
   return {
     template,
-    randomStrings: [...conditionMatches, ...resourceMatches]
+    randomStrings: [...conditionMatches, ...resourceMatches, ...parameterMatches]
   }
 }
 
@@ -229,6 +221,92 @@ function transformParameterArrays(template) {
       })
     }
   }
+}
+
+// Add after cleanResourceNames
+function cleanParameterNames(template) {
+  if (!template.Parameters) return
+
+  const parameterRenames = {}
+  const allMatchesSet = new Set()
+
+  // Get parameter names
+  const parameterNames = Object.keys(template.Parameters)
+
+  // Find common random strings in parameter names
+  const commonRandomStrings = findCommonRandomStringsInIds(parameterNames)
+  
+  // Track parameter name changes
+  const parameterChanges = new Map(
+    parameterNames.map(name => [name, name])
+  )
+
+  // Create replacement patterns for random strings
+  for (const [randomString, count] of commonRandomStrings) {
+    if (count >= 1) {
+      // Find parameters containing this random string
+      parameterNames.forEach(originalName => {
+        const currentName = parameterChanges.get(originalName)
+        if (currentName.includes(randomString)) {
+          console.log('paramName', currentName, randomString)
+          // Create new name by removing the random string
+          const newName = currentName.replace(randomString, '')
+          console.log('newName', newName)
+          parameterChanges.set(originalName, newName)
+          allMatchesSet.add(randomString)
+        }
+      })
+    }
+  }
+
+  // After all replacements are done, create the final renames
+  for (const [originalName, finalName] of parameterChanges) {
+    if (originalName !== finalName) {
+      parameterRenames[originalName] = finalName
+    }
+  }
+
+  /*
+  console.log('parameterRenames', parameterRenames)
+  console.log('allMatches', [...allMatchesSet])
+  process.exit(1)
+  /** */
+
+  // Helper function to update parameter references in an object
+  function updateParameterRefs(obj) {
+    if (!obj || typeof obj !== 'object') return
+
+    if (Array.isArray(obj)) {
+      obj.forEach(item => updateParameterRefs(item))
+      return
+    }
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (key === 'Ref' && typeof value === 'string' && parameterRenames[value]) {
+        obj[key] = parameterRenames[value]
+      } else if (typeof value === 'object') {
+        updateParameterRefs(value)
+      }
+    }
+  }
+
+  // Second pass: rename parameters and update references
+  for (const [oldName, newName] of Object.entries(parameterRenames)) {
+    // Only rename if the new name doesn't already exist
+    if (!template.Parameters[newName]) {
+      template.Parameters[newName] = template.Parameters[oldName]
+      delete template.Parameters[oldName]
+
+      // Update all parameter references in the template
+      updateParameterRefs(template.Resources)
+      updateParameterRefs(template.Outputs)
+      if (template.Conditions) {
+        updateParameterRefs(template.Conditions)
+      }
+    }
+  }
+
+  return [...allMatchesSet]
 }
 
 const RESOURCE_KEY_ORDER = [
