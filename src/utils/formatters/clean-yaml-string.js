@@ -95,8 +95,8 @@ function insertBlankLines(content) {
   
   // Add blank lines before top-level keys if they don't have comments/spaces above
   content = content.replace(
-    /(?<!^\s*$)(?<!#.*\n)(?<!^\s*#.*\n)(?:^|^  )(Description|Metadata|Rules|Mappings|Parameters|Conditions|Resources|Outputs):/gm,
-    '\n$1:'
+    /(?<!^\s*$)(?<!#.*\n)(?<!^\s*#.*\n)(^|^  )(Description|Metadata|Rules|Mappings|Parameters|Conditions|Resources|Outputs):/gm,
+    '\n$1$2:'
   )
   
   // /((?<!^\s*$\n)^  [A-Za-z0-9_-]+:\s*\n\s+Type:\s+(?:AWS|Custom|[A-Za-z0-9]+)::[A-Za-z0-9:]+)/gm

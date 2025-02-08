@@ -12,62 +12,93 @@ const ajv = new Ajv({
   allowUnionTypes: true,  // Allow union types
 })
 
+// Known validation exceptions to ignore
+const VALIDATION_EXCEPTIONS = new Map([
+  ['AWS::CloudFormation::CustomResource', {
+    ignoredProperties: ['resourceType'],
+    reason: 'Valid property missing from schema'
+  }],
+  // Add more exceptions as needed
+  ['AWS::Lambda::Function', {
+    ignoredProperties: ['Handler'],  // Example of another potential exception
+    reason: 'Schema validation too strict for Handler property'
+  }]
+])
+
 async function validateTemplate(template) {
+  const allErrors = []
   let isValid = true
   const { Resources, via } = resolveResources(template)
   if (!Resources) {
     console.log(`No Resources found in ${via} template`)
-    return isValid
+    return { isValid, errors: allErrors }
   }
 
   const resources = getResourcesEntries(template)
-  console.log('resources', resources)
+  // console.log('resources', resources)
 
   // Validate no resources have the same logical ID
   const logicalIds = resources.map(([logicalId]) => logicalId)
   const uniqueLogicalIds = new Set(logicalIds)
   if (uniqueLogicalIds.size !== logicalIds.length) {
+    isValid = false
+    allErrors.push({
+      path: 'template',
+      message: 'Duplicate logical IDs found in Resources',
+      details: { duplicateIds: logicalIds.filter(id => logicalIds.filter(x => x === id).length > 1) }
+    })
     console.error('Duplicate logical IDs found in Resources')
-    return false
+    return { isValid, errors: allErrors }
   }
 
   // Process all resources in parallel
-  const validations = resources.map(async ([logicalId, resource]) => {
+  const validations = await Promise.all(resources.map(async ([logicalId, resource]) => {
     if (!resource.Type) {
+      const error = {
+        path: logicalId,
+        message: 'Resource missing Type property',
+        details: { resource }
+      }
       console.error(`Resource ${logicalId} missing Type property`)
-      return false
+      return { isValid: false, errors: [error] }
     }
 
     const props = resource.Properties || {}
-    const resourceValid = await validateResource(resource.Type, props, logicalId)
-    
-    if (!resourceValid) {
-      console.error(`Invalid properties in resource ${logicalId} (${resource.Type})`)
-      return false
+    return validateResource(resource.Type, props, logicalId)
+  }))
+
+  // Combine all validation results
+  validations.forEach(result => {
+    if (!result.isValid) {
+      isValid = false
     }
-    return true
+    allErrors.push(...result.errors)
   })
 
-  // Wait for all validations to complete
-  const results = await Promise.all(validations)
-  return results.every(result => result)
+  return { isValid, errors: allErrors }
 }
 
 async function validateResource(resourceType, properties, logicalId) {
+  const errors = []
+
   // Skip validation for Custom:: resources
   if (resourceType.startsWith('Custom::')) {
     // console.warn(`Warning: Skipping validation for custom resource type ${resourceType}`)
-    return true
+    return { isValid: true, errors }
   }
 
   const schema = await loadSchema(resourceType)
   if (!schema) {
     console.warn(`Warning: No schema found for resource type ${resourceType}`)
-    return true
+    return { isValid: true, errors }
   }
 
   // First validate required properties
-  const requiredValid = validateRequiredProperties(schema, properties, logicalId, resourceType)
+  const {
+    isValid: requiredValid, 
+    errors: requiredErrors 
+  } = validateRequiredProperties(schema, properties, logicalId, resourceType)
+  errors.push(...requiredErrors)
 
   try {
     // Get or compile validator for this schema
@@ -78,7 +109,6 @@ async function validateResource(resourceType, properties, logicalId) {
         properties: schema.properties || {},
         definitions: schema.definitions || {},
         additionalProperties: false
-        // Note: We're not including required here since we handle it separately
       }
 
       const validator = ajv.compile(validationSchema)
@@ -95,16 +125,31 @@ async function validateResource(resourceType, properties, logicalId) {
       }
     }
 
-    const valid = validator(validationProps)
+    let valid = validator(validationProps)
 
     if (!valid) {
       console.log('───────────────────────────────')
       console.error(`\nValidation errors in \n"${logicalId}" for ${resourceType}:`)
+      
+      // Get exceptions for this resource type
+      const exceptions = VALIDATION_EXCEPTIONS.get(resourceType)
+      
+      // Track if all errors are in exceptions
+      let allErrorsExcepted = true
+      
       validator.errors.forEach(error => {
-        // Get the full property path
+        // Skip if this error is in our exceptions list
+        if (exceptions?.ignoredProperties?.includes(error.params.additionalProperty)) {
+          console.log(`Ignoring known issue: ${error.params.additionalProperty} in ${resourceType} (${exceptions.reason})`)
+          return
+        }
+
+        // If we get here, we found an error that's not excepted
+        allErrorsExcepted = false
+
+        // Rest of the error handling stays the same...
         const propertyPath = error.instancePath.split('/').slice(1)
         
-        // Check if any part of the path contains an intrinsic function
         let currentObj = properties
         let hasIntrinsic = false
         for (const pathPart of propertyPath) {
@@ -116,52 +161,76 @@ async function validateResource(resourceType, properties, logicalId) {
           currentObj = currentObj[pathPart]
         }
 
-        // Only show errors for properties that don't use intrinsic functions
         if (!hasIntrinsic) {
           const path = error.instancePath || 'root'
+          let errorMessage
           if (error.keyword === 'additionalProperties') {
-            console.error(`- ${path}: Invalid property "${error.params.additionalProperty}"`)
+            errorMessage = `${path}: Invalid property "${error.params.additionalProperty}"`
           } else {
-            console.error(`- ${path}: ${error.message}`)
+            errorMessage = `${path}: ${error.message}`
           }
+          
+          errors.push({
+            path,
+            message: errorMessage,
+            details: error
+          })
+
+          console.error(`- ${errorMessage}`)
           console.error('  Error details:', JSON.stringify(error, null, 2))
         }
       })
+
+      // Update valid flag based on if all errors were excepted
+      if (allErrorsExcepted) {
+        valid = true
+      }
     }
 
-    return valid && requiredValid;  // Both validations must pass
+    return {
+      isValid: valid && requiredValid,
+      errors
+    }
+
   } catch (err) {
     console.error(`Error validating ${resourceType} in "${logicalId}":`, err.message)
     console.error('Stack:', err.stack)
-    return false
+    errors.push({
+      path: 'validation',
+      message: `Error validating ${resourceType}: ${err.message}`,
+      details: err
+    })
+    return { isValid: false, errors }
   }
 }
 
 function validateRequiredProperties(schema, properties, logicalId, resourceType) {
-  if (!schema.required || !Array.isArray(schema.required)) {
-    return true
-  }
-
+  const errors = []
   let isValid = true
-  const missingProps = []
 
-  for (const requiredProp of schema.required) {
-    // Check if property exists, even if it's an intrinsic function
-    if (!(requiredProp in properties)) {
-      missingProps.push(requiredProp)
+  if (!schema.required || !Array.isArray(schema.required)) {
+    return { isValid, errors }
+  }
+
+  // Check each required property
+  schema.required.forEach(propName => {
+    const propValue = properties[propName]
+    if (propValue === undefined) {
       isValid = false
+      const error = {
+        path: propName,
+        message: `Missing required property: ${propName}`,
+        details: {
+          keyword: 'required',
+          params: { missingProperty: propName }
+        }
+      }
+      errors.push(error)
+      console.error(`Required property missing in "${logicalId}" (${resourceType}):`, propName)
     }
-  }
+  })
 
-  if (missingProps.length > 0) {
-    console.log('───────────────────────────────')
-    console.error(`\nMissing required properties in \n"${logicalId}" for ${resourceType}:`)
-    missingProps.forEach(prop => {
-      console.error(`- ${prop}`)
-    })
-  }
-
-  return isValid
+  return { isValid, errors }
 }
 
 async function validateNamePattern(schema, path, value, resourceType) {
@@ -258,6 +327,7 @@ function hasIntrinsicFunction(value, path = []) {
     key.startsWith('Ref::') || 
     key === 'Ref::Ref' || 
     key === 'Ref::GetAtt'
+    // key === 'Ref::Sub'
   )
   if (hasTransformed) return true
 

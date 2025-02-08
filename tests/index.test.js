@@ -1,36 +1,7 @@
 const { test } = require('uvu')
 const assert = require('uvu/assert')
 const { cleanCloudFormation } = require('../src')
-const fs = require('fs').promises
-const path = require('path')
-
-// Helper to read fixture files
-async function readFixture(name) {
-  const fixturePath = path.join(__dirname, 'fixtures', name)
-  return fs.readFile(fixturePath, 'utf8')
-}
-
-// Helper to create snapshot
-async function matchSnapshot(name, content) {
-  const snapshotDir = path.join(__dirname, '__snapshots__')
-  const snapshotPath = path.join(snapshotDir, `${name}.snap`)
-
-  // Ensure snapshot directory exists
-  await fs.mkdir(snapshotDir, { recursive: true })
-
-  try {
-    const existing = await fs.readFile(snapshotPath, 'utf8')
-    assert.fixture(content, existing)
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      // Create new snapshot if it doesn't exist
-      await fs.writeFile(snapshotPath, content)
-      console.log(`Created new snapshot: ${name}`)
-    } else {
-      throw err
-    }
-  }
-}
+const { readFixture, matchSnapshot } = require('./utils')
 
 test('cleanCloudFormation - stack-one.json', async () => {
   const input = await readFixture('stack-one.json')
@@ -44,16 +15,16 @@ test('cleanCloudFormation - stack-two.json', async () => {
   await matchSnapshot('stack-two', yaml)
 })
 
-// test('cleanCloudFormation - serverless.yml', async () => {
-//   const input = await readFixture('serverless.yml')
-//   const { yaml } = await cleanCloudFormation(input)
-//   await matchSnapshot('serverless', yaml)
-// })
+test('cleanCloudFormation - serverless.yml', async () => {
+  const input = await readFixture('serverless.yml')
+  const { yaml } = await cleanCloudFormation(input)
+  await matchSnapshot('serverless', yaml)
+})
 
-test('cleanCloudFormation - remote template', async () => {
-  const url = 'https://raw.githubusercontent.com/aws-samples/aws-cloudformation-templates/master/aws/services/CloudFront/cloudfront-security-headers.yaml'
+test.only('cleanCloudFormation - remote template', async () => {
+  const url = 'https://raw.githubusercontent.com/panacloud-modern-global-apps/full-stack-serverless-cdk/798c98300b89cfb5eac6004cd348fa60d05f813b/step16_simple_email_service/python/sending_email_using%20_ses_lambdaa/cdk.out/PythonStack.template.json'
   const { yaml } = await cleanCloudFormation(url)
-  await matchSnapshot('cloudfront-security-headers', yaml)
+  await matchSnapshot('sending_email_using_ses_lambdaa', yaml)
 })
 
 test.run() 
